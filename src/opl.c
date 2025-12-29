@@ -6,10 +6,17 @@
 #include "instruments.h"
 #include "constants.h"
 
+#ifdef USE_NATIVE_OPL2
+// F-Number table for Octave 4 @ 3.58 MHz
+const uint16_t fnum_table[12] = {
+    277, 293, 311, 329, 349, 370, 392, 415, 440, 466, 493, 523
+};
+#else
 // F-Number table for Octave 4 @ 4.0 MHz
 const uint16_t fnum_table[12] = {
     308, 325, 345, 365, 387, 410, 434, 460, 487, 516, 547, 579
 };
+#endif
 
 uint8_t channel_is_drum[9] = {0,0,0,0,0,0,0,0,0}; 
 
