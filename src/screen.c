@@ -4,6 +4,8 @@
 #include <rp6502.h>
 #include "usb_hid_keys.h"
 #include <stdio.h>
+#include "instruments.h"
+#include "player.h"
 
 char message[MESSAGE_LENGTH + 1]; // Text message buffer (+1 for null terminator)
 
@@ -56,26 +58,6 @@ void draw_note(uint16_t xram_vga_addr, uint8_t midi_note) {
     }
 }
 
-void handle_navigation() {
-    // Arrow keys for cursor
-    if (key_pressed(KEY_DOWN))  { if (cur_row < 63) cur_row++; }
-    if (key_pressed(KEY_UP))    { if (cur_row > 0)  cur_row--; }
-    if (key_pressed(KEY_RIGHT)) { if (cur_channel < 8) cur_channel++; }
-    if (key_pressed(KEY_LEFT))  { if (cur_channel > 0) cur_channel--; }
-
-    // Toggle Edit Mode (Space bar)
-    if (key_pressed(KEY_SPACE)) {
-        edit_mode = !edit_mode;
-        printf("Edit Mode: %s\n", edit_mode ? "ON" : "OFF");
-    }
-    
-    // Delete Note
-    if (key_pressed(KEY_BACKSPACE) || key_pressed(KEY_DELETE)) {
-        PatternCell c = {0, 0, 0, 0};
-        write_cell(cur_pattern, cur_row, cur_channel, &c);
-    }
-}
-
 // Formatting helpers
 const char hex_chars[] = "0123456789ABCDEF";
 
@@ -86,42 +68,44 @@ void draw_hex_byte(uint16_t vga_addr, uint8_t val) {
     RIA.rw0 = hex_chars[val & 0x0F];
 }
 
-void render_row(uint8_t row_idx) {
-    // 1. Calculate VGA start address for this row (Line starts at row 2 of screen)
-    // VGA_BASE + (ScreenRow * 80 * 3)
-    uint16_t vga_row_ptr = text_message_addr + ((row_idx + 2) * 80 * 3);
+// pattern_row_idx: The row index in the pattern data (0-31)
+void render_row(uint8_t pattern_row_idx) {
+    // Calculate the Screen Row (28 to 59)
+    uint8_t screen_y = pattern_row_idx + GRID_SCREEN_OFFSET;
     
-    // 2. Draw Row Number (Columns 0-2)
+    // Calculate VGA start address for this screen row
+    uint16_t vga_row_ptr = text_message_addr + (screen_y * 80 * 3);
+    
+    // 1. Draw Row Number (Columns 0-2) in Hex
     RIA.addr0 = vga_row_ptr;
     RIA.step0 = 3;
-    RIA.rw0 = hex_chars[(row_idx >> 4) & 0x0F];
-    RIA.rw0 = hex_chars[row_idx & 0x0F];
+    RIA.rw0 = hex_chars[(pattern_row_idx >> 4) & 0x0F];
+    RIA.rw0 = hex_chars[pattern_row_idx & 0x0F];
     RIA.rw0 = '|';
 
-    // 3. Draw 9 Channels
+    // 2. Draw 9 Channels
     for (uint8_t ch = 0; ch < 9; ch++) {
         PatternCell cell;
-        read_cell(cur_pattern, row_idx, ch, &cell);
+        read_cell(cur_pattern, pattern_row_idx, ch, &cell);
         
-        // Offset for this channel: RowNum(3) + ch * ChannelWidth(8)
+        // Offset for this channel: RowNum(3 chars) + ch * 8 chars per channel
         uint16_t vga_cell_ptr = vga_row_ptr + (3 + ch * 8) * 3;
         
-        // Draw Note (3 chars: e.g., "C-4")
+        // Draw Note
         draw_note(vga_cell_ptr, cell.note);
         
-        // Draw Instrument (2 chars hex)
+        // Draw Instrument (at 4 chars into channel block)
         draw_hex_byte(vga_cell_ptr + (4 * 3), cell.inst);
         
-        // Draw Volume (2 chars hex)
+        // Draw Volume (at 6 chars into channel block)
         draw_hex_byte(vga_cell_ptr + (6 * 3), cell.vol);
     }
 }
 
 void render_grid(void) {
-    // Draw all 60 rows visible on screen
-    // If the pattern has 64, we just draw the first 60 for now.
-    for (uint8_t i = 0; i < 60; i++) {
-        render_row(i);
+    // We are showing 32 rows (0x00 to 0x1F)
+    for (uint8_t i = 0; i < 32; i++) {
+        render_row(i); // 'i' becomes 'pattern_row_idx' inside the function
     }
 }
 
@@ -136,19 +120,122 @@ void set_row_color(uint8_t row_idx, uint8_t bg_color) {
     }
 }
 
-
 // Add this helper to your display/ui logic
 void update_cursor_visuals(uint8_t old_row, uint8_t new_row) {
-    // 1. Reset the old row background to Black (0)
-    // Row + 2 because of our header offset
-    uint16_t old_addr = text_message_addr + ((old_row + 2) * 80 * 3) + 2;
+    // Mapping: Cursor Row (0-31) -> Screen Row (28-59)
+    
+    // Clear old highlight
+    uint16_t old_addr = text_message_addr + ((old_row + GRID_SCREEN_OFFSET) * 80 * 3) + 2;
     RIA.addr0 = old_addr;
     RIA.step0 = 3; 
     for (uint8_t i = 0; i < 80; i++) RIA.rw0 = HUD_COL_BG;
 
-    // 2. Set the new row background to Blue (4)
-    uint16_t new_addr = text_message_addr + ((new_row + 2) * 80 * 3) + 2;
+    // Set new highlight
+    uint16_t new_addr = text_message_addr + ((new_row + GRID_SCREEN_OFFSET) * 80 * 3) + 2;
     RIA.addr0 = new_addr;
     RIA.step0 = 3;
     for (uint8_t i = 0; i < 80; i++) RIA.rw0 = HUD_COL_HIGHLIGHT;
+}
+
+void draw_headers() {
+    // Set RIA to Screen Row 1
+    uint16_t addr = text_message_addr + ((GRID_SCREEN_OFFSET - 1) * 80 * 3);
+    RIA.addr0 = addr;
+    RIA.step0 = 3;
+
+    // Row indicator
+    RIA.rw0 = 'R'; RIA.rw0 = 'N'; RIA.rw0 = ' '; 
+
+    // Channel Headers
+    for (uint8_t i = 0; i < 9; i++) {
+        RIA.rw0 = '|'; RIA.rw0 = 'C'; RIA.rw0 = 'H'; 
+        RIA.rw0 = '0' + i; 
+        RIA.rw0 = ' '; RIA.rw0 = ' '; RIA.rw0 = ' '; RIA.rw0 = ' ';
+    }
+}
+
+void draw_ui_dashboard() {
+    // Row 1: Status
+    // OCTAVE: 4 | INS: 00 (Piano) | CHAN: 0 | MODE: EDIT
+    
+    // Row 3-15: Instrument Parameters (Operator 1 & 2)
+    // OP1: ATK: F  DEC: 1  SUS: 5  REL: 0  MULT: 1  WAVE: 0
+    // OP2: ATK: D  DEC: 2  SUS: 7  REL: 6  MULT: 1  WAVE: 0
+    // FEEDBACK: 6  CONNECTION: 0 (FM)
+}
+
+void clear_top_ui() {
+    RIA.addr0 = text_message_addr;
+    RIA.step0 = 1;
+    // Clear only the top 27 rows
+    for (uint16_t i = 0; i < (GRID_SCREEN_OFFSET * 80); i++) {
+        RIA.rw0 = ' ';
+        RIA.rw0 = HUD_COL_WHITE;
+        RIA.rw0 = HUD_COL_BG;
+    }
+}
+
+void draw_string(uint8_t x, uint8_t y, const char* s, uint8_t fg, uint8_t bg) {
+    uint16_t addr = text_message_addr + (y * 80 + x) * 3;
+    RIA.addr0 = addr;
+    RIA.step0 = 1;
+    while (*s) {
+        RIA.rw0 = *s++;
+        RIA.rw0 = fg;
+        RIA.rw0 = bg;
+    }
+}
+
+void update_dashboard(void) {
+    const OPL_Patch* p = &gm_bank[current_instrument];
+
+    // 1. Header Line (Row 1)
+    draw_string(2, 1, "INSTRUMENT:", HUD_COL_CYAN, HUD_COL_BG);
+    draw_hex_byte(text_message_addr + (1 * 80 + 14) * 3, current_instrument);
+    
+    // You can add a name lookup here if you have one, or just a placeholder
+    draw_string(18, 1, "OCTAVE:", HUD_COL_CYAN, HUD_COL_BG);
+    draw_hex_byte(text_message_addr + (1 * 80 + 26) * 3, current_octave);
+    
+    draw_string(32, 1, "MODE:", HUD_COL_CYAN, HUD_COL_BG);
+    draw_string(38, 1, edit_mode ? "RECORDING" : "PLAYING  ", 
+                edit_mode ? HUD_COL_RED : HUD_COL_GREEN, HUD_COL_BG);
+
+    // 2. Operator Panels (Rows 3-10)
+    // --- MODULATOR (OP1) ---
+    draw_string(2, 4, "[ MODULATOR ]", HUD_COL_YELLOW, HUD_COL_BG);
+    draw_string(2, 6, "MULT/VIB: ", HUD_COL_WHITE, HUD_COL_BG);
+    draw_hex_byte(text_message_addr + (6 * 80 + 12) * 3, p->m_ave);
+    
+    draw_string(2, 7, "KSL/LEV:  ", HUD_COL_WHITE, HUD_COL_BG);
+    draw_hex_byte(text_message_addr + (7 * 80 + 12) * 3, p->m_ksl);
+    
+    draw_string(2, 8, "ATK/DEC:  ", HUD_COL_WHITE, HUD_COL_BG);
+    draw_hex_byte(text_message_addr + (8 * 80 + 12) * 3, p->m_atdec);
+    
+    draw_string(2, 9, "SUS/REL:  ", HUD_COL_WHITE, HUD_COL_BG);
+    draw_hex_byte(text_message_addr + (9 * 80 + 12) * 3, p->m_susrel);
+
+    // --- CARRIER (OP2) ---
+    draw_string(25, 4, "[ CARRIER ]", HUD_COL_YELLOW, HUD_COL_BG);
+    draw_string(25, 6, "MULT/VIB: ", HUD_COL_WHITE, HUD_COL_BG);
+    draw_hex_byte(text_message_addr + (6 * 80 + 35) * 3, p->c_ave);
+    
+    draw_string(25, 7, "KSL/LEV:  ", HUD_COL_WHITE, HUD_COL_BG);
+    draw_hex_byte(text_message_addr + (7 * 80 + 35) * 3, p->c_ksl);
+    
+    draw_string(25, 8, "ATK/DEC:  ", HUD_COL_WHITE, HUD_COL_BG);
+    draw_hex_byte(text_message_addr + (8 * 80 + 35) * 3, p->c_atdec);
+    
+    draw_string(25, 9, "SUS/REL:  ", HUD_COL_WHITE, HUD_COL_BG);
+    draw_hex_byte(text_message_addr + (9 * 80 + 35) * 3, p->c_susrel);
+
+    // 3. Global Settings (Row 12)
+    draw_string(2, 12, "FEEDBACK/CONN:", HUD_COL_CYAN, HUD_COL_BG);
+    draw_hex_byte(text_message_addr + (12 * 80 + 17) * 3, p->feedback);
+    
+    // Connection type display (Additive vs FM)
+    bool additive = (p->feedback & 0x01);
+    draw_string(22, 12, additive ? "(ADDITIVE)" : "(FM SYNTH)", 
+                HUD_COL_MAGENTA, HUD_COL_BG);
 }

@@ -52,48 +52,61 @@ static void init_graphics(void)
 
 int main(void)
 {
-
-    // init_graphics();
-
-    // Enable OPL2 sound
+    // 1. Hardware Initialization
     OPL_Config(1, OPL_ADDR);
     OPL_Init();
 
-    // Enable keyboard input
+    // Mapping Keyboard to XRAM (Ensure KEYBOARD_INPUT matches input.c's address)
     xregn(0, 0, 0, 1, KEYBOARD_INPUT);
-    // Enable gamepad input
     xregn(0, 0, 2, 1, GAMEPAD_INPUT);
 
-    init_graphics();
-    render_grid(); // Initial draw
-    update_cursor_visuals(0, 0); // Highlight first row
+    // 2. Graphics Setup
+    init_graphics();     
+    clear_top_ui();      // Clear rows 0-27
+    draw_ui_dashboard(); // Draw the STATIC labels (INSTRUMENT:, OP1:, etc.)
+    draw_headers();      // Draw the grid headers (CH0, CH1, etc.)
+    
+    // 3. Initial State Draw
+    update_dashboard();  // Draw the DYNAMIC values (The actual hex numbers)
+    render_grid();       // Initial grid draw
+    update_cursor_visuals(0, 0); 
 
-    init_input_system(); // From your input.c
+    // 4. Software Initialization
+    init_input_system(); 
+    // player_init();       // Sets up initial OPL patch
 
-    // Load General MIDI bank into OPL -- all Piano to start.
+    // Default all OPL channels to Piano
     for (uint8_t i = 0; i < 9; i++){
-        OPL_SetPatch(i, &gm_bank[0]); // Set instrument 0 on channel 0
+        OPL_SetPatch(i, &gm_bank[0]);
     }
 
     uint8_t vsync_last = RIA.vsync;
 
     while (1) {
-        // Wait for vertical sync
         while (RIA.vsync == vsync_last);
         vsync_last = RIA.vsync;
 
-        // 1. Read hardware state into keystates bitmask
-        handle_input(); 
+        // --- INPUT STAGE ---
+        handle_input(); // This MUST update keystates AND prev_keystates
 
+        // --- LOGIC STAGE ---
         uint8_t prev_row = cur_row;
+        bool prev_edit_mode = edit_mode; // Track if we toggled record mode
+
         handle_navigation(); 
+        player_tick();
+
+        // --- UI REFRESH STAGE ---
         
+        // If the row moved, update highlight
         if (cur_row != prev_row) {
             update_cursor_visuals(prev_row, cur_row);
         }
 
-        // 2. Process the "Piano" logic
-        player_tick();
-
+        // If something changed the instrument, octave, or edit mode
+        // we refresh the dashboard values.
+        if (edit_mode != prev_edit_mode) {
+            update_dashboard(); 
+        }
     }
 }

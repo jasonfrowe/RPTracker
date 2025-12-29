@@ -107,21 +107,6 @@ void reset_button_mappings(uint8_t player_id)
     button_mappings[player_id][ACTION_STOP].gamepad_mask = GP_BTN_X;
 }
 
-uint8_t repeat_timer = 0;
-uint8_t cursor_row = 0;
-
-void process_navigation() {
-    if (is_action_pressed(0, ACTION_DOWN)) {
-        repeat_timer++;
-        if (key_pressed(KEY_DOWN) || repeat_timer > REPEAT_DELAY) {
-            cursor_row++;
-            if (repeat_timer > REPEAT_DELAY) repeat_timer = REPEAT_DELAY - REPEAT_RATE;
-        }
-    } else {
-        repeat_timer = 0;
-    }
-}
-
 /**
  * Check if a game action is active for a specific player
  */

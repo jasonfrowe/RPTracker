@@ -4,11 +4,17 @@
 #include "usb_hid_keys.h"
 #include <stdio.h>
 #include "screen.h"
+#include "instruments.h"
 
 // Current State
 uint8_t current_instrument = 0; // Instrument index (0 = Piano)
-uint8_t current_octave_offset = 0; // Adjusts in jumps of 12
+uint8_t current_octave = 4; // Adjusts in jumps of 12
 uint8_t active_midi_note = 0;      // Tracks the currently playing note
+
+#define KEY_REPEAT_DELAY 20 // Frames before repeat starts
+#define KEY_REPEAT_RATE  4  // Frames between repeats
+uint8_t repeat_timer = 0;
+uint8_t last_scancode = 0;
 
 // Piano Mapping: Scancode -> MIDI Offset from C
 // (0 = C, 1 = C#, 2 = D, etc.)
@@ -48,7 +54,7 @@ void player_tick(void) {
             int8_t semitone = get_semitone(k);
             if (semitone != -1) {
                 // MIDI 60 is C-4.
-                target_note = 60 + current_octave_offset + semitone;
+                target_note = (current_octave + 1) * 12 + semitone;
                 note_pressed_this_frame = true;
                 break; // Found a note, stop looking (Monophonic)
             }
@@ -92,12 +98,75 @@ void player_tick(void) {
 
     // 4. Octave Switching (Using F1/F2)
     // Note: Use key_pressed (edge detection) so it only moves 1 octave per tap
-    if (key_pressed(KEY_F1)) {
-        if (current_octave_offset >= 12) current_octave_offset -= 12;
-        printf("Octave Down. Base: %d\n", 60 + current_octave_offset);
+    if (key_pressed(KEY_F1)) { if (current_octave > 0) current_octave--; update_dashboard(); }
+    if (key_pressed(KEY_F2)) { if (current_octave < 8) current_octave++; update_dashboard(); }
+
+    if (key_pressed(KEY_F3)) { 
+        if (current_instrument > 0) {
+            current_instrument--;
+            OPL_SetPatch(cur_channel, &gm_bank[current_instrument]);
+            update_dashboard(); // Redraw instrument name/values at top
+        }
     }
-    if (key_pressed(KEY_F2)) {
-        if (current_octave_offset <= 48) current_octave_offset += 12;
-        printf("Octave Up. Base: %d\n", 60 + current_octave_offset);
+    if (key_pressed(KEY_F4)) { 
+        if (current_instrument < 127) {
+            current_instrument++;
+            OPL_SetPatch(cur_channel, &gm_bank[current_instrument]);
+            update_dashboard();
+        }
+    }
+
+    if (key_pressed(KEY_F3) || key_pressed(KEY_F4)) {
+        // ... instrument logic ...
+        update_dashboard(); // Refresh the labels at the top
+    }   
+
+}
+
+void handle_navigation() {
+    uint8_t move_row = 0;
+    int8_t move_chan = 0;
+    uint8_t active_scancode = 0;
+
+    // Detect which key is being held
+    if (key(KEY_DOWN))  active_scancode = KEY_DOWN;
+    else if (key(KEY_UP))    active_scancode = KEY_UP;
+    else if (key(KEY_LEFT))  active_scancode = KEY_LEFT;
+    else if (key(KEY_RIGHT)) active_scancode = KEY_RIGHT;
+
+    if (active_scancode != 0) {
+        if (active_scancode != last_scancode) {
+            // First press
+            repeat_timer = 0;
+            if (active_scancode == KEY_DOWN) move_row = 1;
+            if (active_scancode == KEY_UP)   move_row = 2; // 2 = Up signal
+            if (active_scancode == KEY_LEFT)  move_chan = -1;
+            if (active_scancode == KEY_RIGHT) move_chan = 1;
+        } else {
+            // Holding
+            repeat_timer++;
+            if (repeat_timer >= KEY_REPEAT_DELAY) {
+                if ((repeat_timer - KEY_REPEAT_DELAY) % KEY_REPEAT_RATE == 0) {
+                    if (active_scancode == KEY_DOWN) move_row = 1;
+                    if (active_scancode == KEY_UP)   move_row = 2;
+                    if (active_scancode == KEY_LEFT)  move_chan = -1;
+                    if (active_scancode == KEY_RIGHT) move_chan = 1;
+                }
+            }
+        }
+    }
+    last_scancode = active_scancode;
+
+    // Apply Row Movement with Bounds (Cap at 63)
+    uint8_t old_row = cur_row;
+    if (move_row == 1 && cur_row < 31) cur_row++; // Cap at 1F
+    if (move_row == 2 && cur_row > 0)  cur_row--;
+
+    // Apply Channel Movement with Bounds (Cap at 8)
+    if (move_chan == -1 && cur_channel > 0) cur_channel--;
+    if (move_chan == 1  && cur_channel < 8) cur_channel++;
+
+    if (old_row != cur_row) {
+        update_cursor_visuals(old_row, cur_row);
     }
 }

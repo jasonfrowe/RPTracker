@@ -14,4 +14,6 @@ extern uint8_t current_octave;
 extern uint8_t current_instrument;
 extern uint8_t player_channel;
 
+extern void handle_navigation(void);
+
 #endif
