@@ -36,14 +36,6 @@
 - **F3 / F4:** Previous / Next Instrument.
 - **Delete / Backspace:** Clear current note/cell.
 
-## 🚀 Build Instructions
-
-This project is compiled using the **LLVM-MOS** SDK.
-
-1. Ensure the `rp6502.h` and the OPL2 library from `RP6502_OPL2` are in your include path.
-2. Compile using the `mos-rp6502-generic` target.
-3. Upload the resulting `.elf` or `.rp6502` file to the Picocomputer via USB or SD card.
-
 ## 📝 Roadmap
 - [x] OPL2 Initialization & 4.0MHz timing.
 - [x] Keyboard Scancode-to-MIDI mapping.
