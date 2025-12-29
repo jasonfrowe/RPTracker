@@ -39,6 +39,11 @@ Use these while in **Edit Mode** to tweak the cell under the cursor without re-p
 *   Play notes on the keyboard while the sequence is running to capture them into the grid in real-time.
 *   Move the cursor with **Arrows** while playing to jump between channels for multi-track jamming.
 
+### 7. Transposition & Octave
+*   **F1 / F2**: Decrease / Increase global keyboard **Octave** (The Brush).
+*   **- / =**: Transpose the current cell down/up by **1 semitone**.
+*   **SHIFT + - / =**: Transpose the current cell down/up by **12 semitones (1 Octave)**.
+
 ---
 
 ## 🖥 User Interface Guide

@@ -342,38 +342,37 @@ void modify_instrument(int8_t delta) {
 }
 
 void modify_note(int8_t delta) {
-    if (is_shift_down()) {
-        // --- IN-PLACE CELL EDIT ONLY ---
-        PatternCell cell;
-        read_cell(cur_pattern, cur_row, cur_channel, &cell);
+    // We only perform local cell edits if we are in Edit Mode
+    if (!edit_mode) return;
+
+    PatternCell cell;
+    read_cell(cur_pattern, cur_row, cur_channel, &cell);
+    
+    // Only transpose if there is an actual note (not empty/Note-Off)
+    if (cell.note > 0 && cell.note < 255) {
         
-        // Only transpose if there is an actual note (not empty/Note-Off)
-        if (cell.note > 0 && cell.note < 255) {
-            int16_t new_note = (int16_t)cell.note + delta;
-            
-            // OPL2/MIDI Range Clamping (C-0 to B-8 is safe)
-            if (new_note < 12)  new_note = 12;
-            if (new_note > 119) new_note = 119;
-            
-            cell.note = (uint8_t)new_note;
-            
-            write_cell(cur_pattern, cur_row, cur_channel, &cell);
-            render_row(cur_row); // Update the white C-4 text
-            
-            // Live Preview: Play the new note immediately so user hears the pitch
-            OPL_NoteOff(cur_channel);
-            OPL_SetPatch(cur_channel, &gm_bank[cell.inst]);
-            OPL_SetVolume(cur_channel, cell.vol << 1);
-            OPL_NoteOn(cur_channel, cell.note);
-        }
-    } 
-    else {
-        // --- GLOBAL BRUSH EDIT ---
-        // Since +/- are "note" keys, it makes sense for them to 
-        // adjust the Octave when Shift is NOT held.
-        if (delta > 0 && current_octave < 8) current_octave++;
-        if (delta < 0 && current_octave > 0) current_octave--;
+        // If Shift is held, move by 12 semitones (1 Octave)
+        // Otherwise, move by 1 semitone
+        int8_t amount = is_shift_down() ? (delta * 12) : delta;
         
-        update_dashboard(); // Update the "OCT" display at the top
+        int16_t new_note = (int16_t)cell.note + amount;
+        
+        // Clamp to MIDI/OPL2 range (C-0 to B-8)
+        if (new_note < 12)  new_note = 12;
+        if (new_note > 119) new_note = 119;
+        
+        cell.note = (uint8_t)new_note;
+        
+        // 1. Save to XRAM
+        write_cell(cur_pattern, cur_row, cur_channel, &cell);
+        
+        // 2. Redraw the grid
+        render_row(cur_row); 
+        
+        // 3. Live Preview: Play the "nudged" note
+        OPL_NoteOff(cur_channel);
+        OPL_SetPatch(cur_channel, &gm_bank[cell.inst]);
+        OPL_SetVolume(cur_channel, cell.vol << 1);
+        OPL_NoteOn(cur_channel, cell.note);
     }
 }
