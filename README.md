@@ -1,49 +1,67 @@
 # RPTracker 
 ### A Native 6502 Music Tracker for the RP6502 & FPGA OPL2
 
-**RPTracker** is a music composition tool designed specifically for the [RP6502 Picocomputer](https://github.com/picocomputer) equipped with a Yamaha YM3812 (OPL2) sound card implemented in a TinyFPGA. It leverages the unique dual-processor architecture of the RP6502 to provide a high-resolution 640x480 tracker interface and real-time FM synthesis.
-
-## 🛠 Hardware Architecture
-
-- **CPU:** W65C02 running at 8MHz.
-- **Sound:** Yamaha YM3812 (OPL2) core on a TinyFPGA via PIX Bus.
-  - **Clock:** Optimized for 4.0MHz OPL2 timing.
-  - **Bus Interface:** PIX Bus Sniffer with a 512-entry hardware FIFO.
-  - **Mapping:** `$FF00` (Index), `$FF01` (Data), `$FF02` (FIFO Flush).
-- **Video:** VGA Mode 1 (640x480, 80x60 Text mode, 8-bit color).
-  - Each character cell uses 3 bytes: `[Character]`, `[Foreground]`, `[Background]`.
-- **Memory:** 
-  - **64KB RAM:** 6502 Code, Stack, Zero Page, and the 128-instrument Patch Bank.
-  - **64KB XRAM:** VGA Text/Attribute buffers and Pattern Data.
-
-## 🎼 Software Features
-
-- **Native Sequencing:** 64 rows per pattern, 9 channels of FM synthesis.
-- **Instrument Library:** 128 AdLib-compatible General MIDI patches stored in local RAM.
-- **Real-time Piano Input:** Musical keyboard mapping using standard USB HID scancodes.
-- **Low-Latency Input:** Direct bitmask reading of the RIA keyboard state for high-performance edge detection.
-
-## 🎹 Keyboard Controls
-
-### Musical Piano (Monophonic)
-- **Lower Octave (C-4 to B-4):** `Z` `S` `X` `D` `C` `V` `G` `B` `H` `N` `J` `M`
-- **Upper Octave (C-5 to B-5):** `Q` `2` `W` `3` `E` `R` `5` `T` `6` `Y` `7` `U`
-
-### Navigation & Editing
-- **Arrow Keys:** Navigate the pattern grid (Row/Channel).
-- **Space:** Toggle Edit/Record Mode.
-- **F1 / F2:** Octave Down / Octave Up.
-- **F3 / F4:** Previous / Next Instrument.
-- **Delete / Backspace:** Clear current note/cell.
-
-## 📝 Roadmap
-- [x] OPL2 Initialization & 4.0MHz timing.
-- [x] Keyboard Scancode-to-MIDI mapping.
-- [x] VGA Mode 1 text initialization.
-- [ ] Pattern Grid Rendering (XRAM to Screen).
-- [ ] VSync-driven Playback Engine (60Hz).
-- [ ] Instrument Editor UI (Live register tweaking).
-- [ ] Disk I/O (Saving/Loading patterns to USB).
+**RPTracker** is a music composition tool for the [RP6502 Picocomputer](https://github.com/picocomputer) and the Yamaha YM3812 (OPL2) sound card. It features a high-resolution 640x480 interface, real-time FM synthesis, and a low-latency 6502 sequencing engine.
 
 ---
-*Created by Jason Rowe.*
+
+## 🎹 Keyboard Control Reference
+
+RPTracker is designed to be operated entirely from the keyboard for high-speed composition.
+
+### 1. Musical Keyboard (Piano Layout)
+The keyboard is mapped into two octaves using a standard "FastTracker II" style layout.
+*   **Lower Octave (C-4 to B-4):**
+    *   `Z` (C) `S` (C#) `X` (D) `D` (D#) `C` (E) `V` (F) `G` (F#) `B` (G) `H` (G#) `N` (A) `J` (A#) `M` (B)
+*   **Upper Octave (C-5 to B-5):**
+    *   `Q` (C) `2` (C#) `W` (D) `3` (D#) `E` (E) `R` (F) `5` (F#) `T` (G) `6` (G#) `Y` (A) `7` (A#) `U` (B)
+
+### 2. Transport & Playback
+*   **F6:** Play / Pause Toggle.
+*   **F7:** Stop & Reset (Stops all sound and moves cursor to Row 00).
+
+### 3. Navigation & Mode Selection
+*   **Arrow Keys:** Navigate the 9-channel pattern grid. (Includes auto-repeat logic).
+*   **Spacebar:** Toggle **Edit Mode**. 
+    *   *Blue Cursor:* Safe/Preview Mode. Piano keys play sound but do not record.
+    *   *Red Cursor:* Record Mode. Piano keys record notes into the grid and auto-advance the cursor.
+
+### 4. Editing Commands
+*   **Backspace / Delete:** Clear the current cell (sets Note, Instrument, and Volume to zero).
+*   **Tilde ( ` ):** Insert **Note Off** (`===`). This stops the sound on that channel during playback.
+*   **F5:** **Instrument Pick.** Samples the instrument ID from the current cell and sets it as your active "brush."
+
+### 5. Instrument & Octave Management
+*   **F1 / F2:** Decrease / Increase the base Octave for the piano keys.
+*   **F3 / F4:** Previous / Next Instrument. 
+    *   *Wraps around* from `00` to `FF` for fast access to percussion kits at the end of the bank.
+
+---
+
+## 🖥 User Interface Guide
+
+The screen is divided into the **Dashboard** (top) and the **Pattern Grid** (bottom).
+
+### Visual Indicators
+*   **Blue Cursor:** You are in **Navigation Mode**.
+*   **Red Cursor:** You are in **Record Mode**. Any notes played will be written to the current pattern.
+*   **Yellow Glow:** The specific data cell (Note/Inst/Vol) currently targeted by the cursor.
+*   **Dark Grey Bars:** Every 4th row (0, 4, 8, etc.) is highlighted to indicate the musical "Bar" and assist with timing.
+
+### Color Coding (Syntax Highlighting)
+To make the dense grid readable, data is color-coded by type:
+*   **White:** Musical Notes (e.g., `C-4`, `G#2`).
+*   **Muted Purple:** Instrument Index (00-FF).
+*   **Muted Green:** Volume Level (00-3F).
+*   **Cyan:** Row Numbers and Static Headers.
+
+---
+
+## 🛠 Memory Architecture
+
+- **Patterns:** Stored in XRAM starting at `$0000`. Each pattern uses 2,304 bytes.
+- **Instrument Bank:** 256 AdLib-compatible patches stored in 6502 Internal RAM for instant access.
+- **Video Buffer:** VGA Mode 1 (3-bytes per pixel) located at `$C000`.
+
+---
+*Developed for the RP6502 Picocomputer Project.*
