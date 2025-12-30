@@ -6,6 +6,7 @@
 
 extern uint8_t cur_order_idx;
 extern uint16_t song_length;
+extern bool is_song_mode;
 
 extern void update_order_display();
 extern uint8_t read_order_xram(uint8_t index);

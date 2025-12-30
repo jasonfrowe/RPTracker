@@ -44,7 +44,7 @@ class Console:
             devices = glob.glob("/dev/tty.usbmodem*")
             if devices:
                 devices.sort()
-                return devices[1] 
+                return devices[0] 
             return "/dev/tty.usbmodem11401" # Fallback if detection fails
         elif platform.system() == "Linux":
             return "/dev/ttyACM0"

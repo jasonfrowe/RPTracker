@@ -332,6 +332,14 @@ void update_dashboard(void) {
     draw_string(2, 2, "PATTERN:", HUD_COL_CYAN, HUD_COL_BG);
     draw_hex_byte(text_message_addr + (2 * 80 + 11) * 3, cur_pattern);
 
+    // Display current mode
+    draw_string(32, 2, "MODE:", HUD_COL_CYAN, HUD_COL_BG);
+    if (is_song_mode) {
+        draw_string(38, 2, "SONG   ", HUD_COL_YELLOW, HUD_COL_BG);
+    } else {
+        draw_string(38, 2, "PATTERN", HUD_COL_GREEN, HUD_COL_BG);
+    }
+
     update_order_display();
 
 }

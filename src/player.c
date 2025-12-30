@@ -128,6 +128,12 @@ void player_tick(void) {
     if (key_pressed(KEY_MINUS)) modify_note(-1);
     if (key_pressed(KEY_EQUAL)) modify_note(1);
 
+    // F8: Toggle Song vs Pattern Mode
+    if (key_pressed(KEY_F8)) {
+        is_song_mode = !is_song_mode;
+        update_dashboard();
+    }
+
     // Pattern Change: F9 and F10
     if (key_pressed(KEY_F9)) change_pattern(-1);
     if (key_pressed(KEY_F10)) change_pattern(1);
@@ -204,28 +210,35 @@ void sequencer_step(void) {
 
     if (seq.tick_counter >= seq.ticks_per_row) {
         seq.tick_counter = 0;
-
         uint8_t old_row = cur_row;
+
         // if (cur_row < 31) cur_row++; else cur_row = 0;
         if (cur_row < 31) {
             cur_row++;
         } else {
             // END OF PATTERN: Move to next step in the playlist
             cur_row = 0;
+            
+            if (is_song_mode) {
             cur_order_idx++;
 
-            // Loop the song if we hit the end of the defined length
-            if (cur_order_idx >= song_length) {
-                cur_order_idx = 0;
-            }
+                // Loop the song if we hit the end of the defined length
+                if (cur_order_idx >= song_length) {
+                    cur_order_idx = 0;
+                }
 
-            // Get the pattern ID for this new step
-            cur_pattern = read_order_xram(cur_order_idx);
+                // Get the pattern ID for this new step
+                cur_pattern = read_order_xram(cur_order_idx);
+
+                // Refresh the whole grid for the new pattern
+                render_grid();
+                // update_dashboard();
+            }
             
-            // Refresh the whole grid for the new pattern
-            render_grid();
-            update_dashboard();
         }
+
+        update_cursor_visuals(old_row, cur_row, cur_channel, cur_channel);
+        if (cur_row == 0) update_dashboard(); // Refresh if pattern or order changed
 
         for (uint8_t ch = 0; ch < 9; ch++) {
             // Priority: If the user is jamming on this channel, don't play sequenced note

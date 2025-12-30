@@ -7,6 +7,7 @@
 
 uint8_t cur_order_idx = 0; // Where we are in the playlist
 uint16_t song_length = 1;   // Total number of patterns in the song
+bool is_song_mode = false;   // Default to Pattern Mode
 
 void write_order_xram(uint8_t index, uint8_t pattern_id) {
     // 1. Point the RIA to the Order List + the specific slot
