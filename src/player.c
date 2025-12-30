@@ -82,7 +82,12 @@ void player_tick(void) {
                 // ONLY advance the row if the sequencer IS NOT playing.
                 // If the sequencer IS playing, it is already advancing the row for us.
                 if (!seq.is_playing) {
-                    if (cur_row < 31) cur_row++;
+                    // if (cur_row < 31) cur_row++;
+                    if (cur_row < 31) {
+                        cur_row++;
+                    } else {
+                        cur_row = 0; // Loop back to the start of the 32-row block
+                    }
                 }
             }
             
@@ -184,9 +189,15 @@ void handle_navigation() {
     uint8_t old_row = cur_row;
     uint8_t old_chan = cur_channel;
 
-    // Apply Row Movement (Capped at 0-31 for our 1F bottom alignment)
-    if (move_row == 1 && cur_row < 31) cur_row++; 
-    if (move_row == 2 && cur_row > 0)  cur_row--;
+    // Apply Row Movement with Wrapping
+    if (move_row == 1) { // Move Down
+        if (cur_row < 31) cur_row++; 
+        else cur_row = 0; // Wrap 1F -> 00
+    }
+    if (move_row == 2) { // Move Up
+        if (cur_row > 0) cur_row--;
+        else cur_row = 31; // Wrap 00 -> 1F
+    }
 
     // Apply Channel Movement (Capped at 0-8)
     if (move_chan == -1 && cur_channel > 0) cur_channel--;
