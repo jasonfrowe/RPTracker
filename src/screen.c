@@ -392,21 +392,30 @@ void draw_ui_dashboard(void) {
     // Row 20: Title
     draw_string(1, 20, "[ COMMAND CHEATSHEET ]", HUD_COL_YELLOW, HUD_COL_BG);
 
-    // Columns:  Column 1 (Pos 2)       Column 2 (Pos 28)       Column 3 (Pos 54)
-    // Row 21: Performance              Sequencing              Editing
-    draw_string(2, 21, "F1/F2 : Octave      F8    : Mode         - / =  : Transpose", HUD_COL_CYAN, HUD_COL_BG);
-    draw_string(2, 22, "F3/F4 : Instrument  F9/10 : Pattern      [ / ]  : Volume",    HUD_COL_CYAN, HUD_COL_BG);
-    draw_string(2, 23, "F5    : Pick Ins    F11/12: Sequence     Space  : Record",    HUD_COL_CYAN, HUD_COL_BG);
-    
-    // Row 24: Transport                Clipboard               Files/System
-    draw_string(2, 24, "F6/F7 : Play/Stop   Ctrl+C: Copy Pat     Ctrl+S : Save Song", HUD_COL_CYAN, HUD_COL_BG);
-    draw_string(2, 25, "Esc   : Panic       Ctrl+V: Paste Pat    Ctrl+O : Load Song", HUD_COL_CYAN, HUD_COL_BG);
+    // Column Alignment Guide:
+    // Col 1: Starts at 2.  Label is 11 chars + " : " (3) = 14 chars. Key starts at 16.
+    // Col 2: Starts at 28. Label is 11 chars + " : " (3) = 14 chars. Key starts at 42.
+    // Col 3: Starts at 54. Label is 11 chars + " : " (3) = 14 chars. Key starts at 68.
 
-    // Optional: Make the Keys White to make them stand out from the labels
+    // Row 21: Performance / Nav / Edit
+    draw_string(2, 21, "Octave     : F1/F2   Mode      : F8       Transpose : - / =", HUD_COL_CYAN, HUD_COL_BG);
+    // Row 22: Performance / Nav / Edit
+    draw_string(2, 22, "Instrument : F3/F4   Pattern   : F9/10    Volume    : [ / ]", HUD_COL_CYAN, HUD_COL_BG);
+    // Row 23: Performance / Nav / Edit
+    draw_string(2, 23, "Pick Ins   : F5      Sequence  : F11/12   Record    : Space", HUD_COL_CYAN, HUD_COL_BG);
+    // Row 24: Transport / Clipboard / Files
+    draw_string(2, 24, "Play/Stop  : F6/F7   Copy Pat  : Ctrl+C   Save Song : Ctrl+S", HUD_COL_CYAN, HUD_COL_BG);
+    // Row 25: Safety / Clipboard / Files
+    draw_string(2, 25, "Panic      : Esc     Paste Pat : Ctrl+V   Load Song : Ctrl+O", HUD_COL_CYAN, HUD_COL_BG);
+
+    // Highlight the KEYS in White (Offset to the right of the colons)
     for (uint8_t r = 21; r <= 25; r++) {
-        set_text_color(2,  r, 7, HUD_COL_WHITE, HUD_COL_BG); // Col 1 Keys
-        set_text_color(22, r, 7, HUD_COL_WHITE, HUD_COL_BG); // Col 2 Keys
-        set_text_color(43, r, 7, HUD_COL_WHITE, HUD_COL_BG); // Col 3 Keys
+        // Col 1 Keys (starts at 15, covers 5-6 chars)
+        set_text_color(15, r, 6, HUD_COL_WHITE, HUD_COL_BG); 
+        // Col 2 Keys (starts at 41, covers 6-7 chars)
+        set_text_color(35, r, 7, HUD_COL_WHITE, HUD_COL_BG);
+        // Col 3 Keys (starts at 67, covers 7 chars)
+        set_text_color(56, r, 7, HUD_COL_WHITE, HUD_COL_BG);
     }
     
     draw_string(65, 20, "[ SYSTEM ]", HUD_COL_YELLOW, HUD_COL_BG);
