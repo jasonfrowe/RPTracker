@@ -189,7 +189,7 @@ void handle_filename_input() {
             if (k == KEY_ESC) {
                 is_dialog_active = false;
                 refresh_all_ui(); // Clear the box and restore the dashboard
-                draw_ui_dashboard(); // Refresh to hide box
+                //draw_ui_dashboard(); // Refresh to hide box
                 return;
             }
 
@@ -200,7 +200,7 @@ void handle_filename_input() {
                 
                 is_dialog_active = false;
                 refresh_all_ui(); // Clear the box and restore the dashboard
-                draw_ui_dashboard();
+                //draw_ui_dashboard();
                 return;
             }
         }

@@ -294,8 +294,27 @@ void handle_transport_controls() {
     // F5: Play / Pause
     if (key_pressed(KEY_F6)) {
         seq.is_playing = !seq.is_playing;
-        seq.tick_counter = seq.ticks_per_row; // Trigger first row immediately
-        update_dashboard(); // Show Play/Pause status
+        
+        if (seq.is_playing) {
+            // 1. Force the sequencer to fire a row update on the next frame
+            seq.tick_counter = seq.ticks_per_row; 
+            
+            // 2. Sync the Pattern ID to the current Sequence Slot
+            // This ensures if you were looking at Pattern 0, but the sequence 
+            // says that slot is Pattern 2, it jumps to Pattern 2.
+            cur_pattern = read_order_xram(cur_order_idx);
+            
+            // 3. Kill any ringing keyboard note so it doesn't get stuck
+            if (active_midi_note != 0) {
+                OPL_NoteOff(cur_channel);
+                active_midi_note = 0;
+            }
+            
+            // 4. Refresh UI to show the correct pattern/highlight
+            render_grid();
+            update_cursor_visuals(cur_row, cur_row, cur_channel, cur_channel);
+        }
+        update_dashboard();
     }
 
     // F6: Stop & Reset
