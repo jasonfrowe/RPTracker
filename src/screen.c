@@ -342,8 +342,7 @@ void draw_ui_dashboard(void) {
     draw_string(0, 26, h_line, HUD_COL_DARKGREY, HUD_COL_BG);
 
     // 2. Static Labels (Rows 1-4)
-    // draw_string(2, 1, "RP6502 TRACKER v0.1  [ FILE: UNTITLED.RPT ]", HUD_COL_WHITE, HUD_COL_BG);
-    draw_string(2, 1, "RP6502 TRACKER v0.1  [ FILE: ", HUD_COL_WHITE, HUD_COL_BG);
+    draw_string(2, 1, "RP6502 TRACKER v0.2  [ FILE: ", HUD_COL_WHITE, HUD_COL_BG);
     // Draw the actual filename in a distinct color (Cyan looks good here)
     draw_string(31, 1, active_filename, HUD_COL_CYAN, HUD_COL_BG);
     // Close the bracket
