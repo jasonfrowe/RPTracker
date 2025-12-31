@@ -73,14 +73,4 @@ The pattern grid starts at **Row 28**.
     *   **Cyan:** Dividers and Row Numbers.
 
 ---
-
-## 🛠 Memory Architecture & Technicals
-
-*   **Pattern Data (XRAM $0000):** 16 patterns max. Each pattern is 32 rows × 9 channels × 4 bytes (1,152 bytes per pattern).
-*   **Sequence Order (XRAM $B000):** 256-byte playlist for song structure.
-*   **Video Buffer (XRAM $C000):** VGA Mode 1 (80x60 Text, 3-bytes per character).
-*   **Instrument Library (RAM):** 256 AdLib-compatible patches (4KB) stored in 6502 main memory.
-*   **Keyboard Bitmask (XRAM $EF00):** High-speed input reading via RIA portals.
-
----
 *Created by Jason Rowe. Developed for the RP6502 Picocomputer Project.*
