@@ -14,6 +14,7 @@ typedef struct {
 extern uint8_t shadow_b0[9]; 
 extern uint8_t shadow_ksl_m[9];
 extern uint8_t shadow_ksl_c[9];
+extern uint8_t opl_hardware_shadow[256];
 
 extern const uint16_t fnum_table[12];
 

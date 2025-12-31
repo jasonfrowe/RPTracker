@@ -334,4 +334,9 @@ void OPL_SetPatch(uint8_t channel, const OPL_Patch* p) {
     OPL_Write(0xE0 + m, p->m_wave);
     OPL_Write(0xE0 + c, p->c_wave);
     OPL_Write(0xC0 + channel, p->feedback);
+
+    // SYNC logic shadows with the new patch data
+    shadow_ksl_m[channel] = p->m_ksl & 0xC0;
+    shadow_ksl_c[channel] = p->c_ksl & 0xC0;
+
 }

@@ -21,6 +21,17 @@ const uint16_t fnum_table[12] = {
 
 uint8_t channel_is_drum[9] = {0,0,0,0,0,0,0,0,0}; 
 
+// Full shadow of the OPL2's 256 registers
+uint8_t opl_hardware_shadow[256];
+
+// Initialize shadow with a "dirty" value to force the first writes
+void OPL_ShadowReset() {
+    for (int i = 0; i < 256; i++) {
+        opl_hardware_shadow[i] = 0xFF; // Non-zero/Impossible state
+    }
+}
+
+
 // Shadow registers for all 9 channels
 // We need this to remember the Block/F-Number when we send a NoteOff
 uint8_t shadow_b0[9] = {0}; 
@@ -48,20 +59,22 @@ uint16_t midi_to_opl_freq(uint8_t midi_note) {
 }
 
 void OPL_Write(uint8_t reg, uint8_t data) {
-    
-    
+    // Check if the hardware already has this value
+    if (opl_hardware_shadow[reg] == data) {
+        return;
+    }
+
+    // Update the shadow
+    opl_hardware_shadow[reg] = data;
+
 #ifdef USE_NATIVE_OPL2
     RIA.addr1 = OPL_ADDR + reg;
-    RIA.rw1 = data;  // Write Data  (FF01)
-
-#else    // Native RIA OPL2 Write (Device 2, Channel 0)
-    // printf("OPL_Write: Reg=0x%02X Data=0x%02X Addr=0x%04X\n", reg, data, OPL_ADDR);
-    RIA.addr1 = OPL_ADDR; // OPL Write Index
+    RIA.rw1 = data;
+#else
+    RIA.addr1 = OPL_ADDR;
     RIA.step1 = 1;
-    
-    RIA.rw1 = reg;   // Write Index (FF00)
-    RIA.rw1 = data;  // Write Data  (FF01)
-    // Any delays are now handled by the FIFO in hardware
+    RIA.rw1 = reg;
+    RIA.rw1 = data;
 #endif
 }
 
