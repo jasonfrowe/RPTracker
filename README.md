@@ -1,66 +1,83 @@
 # RPTracker 
-### A Native 6502 Music Tracker for the RP6502 & FPGA OPL2
+### A Native 6502 Music Tracker for the RP6502 (Picocomputer)
 
-**RPTracker** is a music composition tool for the [RP6502 Picocomputer](https://github.com/picocomputer) and the Yamaha YM3812 (OPL2) sound card. It features a high-resolution 640x480 interface, real-time FM synthesis, and a low-latency 6502 sequencing engine.
+**RPTracker** is a high-performance music composition tool designed for the [RP6502 Picocomputer](https://github.com/picocomputer). It features a 640x480 VGA interface and targets both the **Native RIA OPL2** emulation and the **FPGA OPL2** sound card. It provides a classic "tracker" workflow with modern high-resolution visual feedback.
 
 ---
 
 ## 🎹 Keyboard Control Reference
 
-RPTracker uses a dual-mode input system: **Global Brush** adjustments (for future notes) and **In-Place Editing** (tweaking existing notes).
-
 ### 1. Musical Keyboard (Piano Layout)
-*   **Lower Octave (C-4 to B-4):** `Z S X D C V G B H N J M`
-*   **Upper Octave (C-5 to B-5):** `Q 2 W 3 E R 5 T 6 Y 7 U`
+RPTracker uses a standard "FastTracker II" style layout mapping:
+*   **Lower Octave (C-3 to B-3):** `Z S X D C V G B H N J M`
+*   **Upper Octave (C-4 to B-4):** `Q 2 W 3 E R 5 T 6 Y 7 U`
 
 ### 2. Global "Brush" Controls
-These keys change the settings for the **next** notes you record. 
-*   **F1 / F2** or **- / =**: Decrease / Increase the global keyboard **Octave** (Range: 0-8).
+These keys adjust the settings used when recording **new** notes.
+*   **F1 / F2**: Decrease / Increase global keyboard **Octave**.
 *   **F3 / F4**: Previous / Next **Instrument** (Wraps 00-FF).
-*   **[ / ]**: Decrease / Increase global **Volume** (Range: 00-3F).
+*   **[ / ]**: Decrease / Increase global **Volume** (Range 00-3F).
+*   **F5**: **Instrument Pick.** Samples the Note, Instrument, and Volume from the grid into your current Brush.
 
-### 3. In-Place Editing (SHIFT + Key)
-Use these while in **Edit Mode** to tweak the cell under the cursor without re-playing the note.
-*   **SHIFT + - / =**: **Transpose** the note in the current cell up/down by one semitone.
-*   **SHIFT + F3 / F4**: Change the **Instrument** of the current cell only.
-*   **SHIFT + [ / ]**: Adjust the **Volume** of the current cell only.
-*   *Note: In-Place edits provide a "Live Preview," immediately updating the OPL2 hardware so you can hear the change.*
-
-### 4. Transport & Navigation
-*   **F6 / F7**: Play-Pause / Stop-Reset.
+### 3. Navigation & Transport
 *   **Arrow Keys**: Navigate the 9-channel pattern grid.
-*   **Spacebar**: Toggle **Edit Mode** (Red Cursor = Recording, Blue Cursor = Navigation).
+*   **F6**: **Play / Pause.** In Song Mode, starts from the current Sequence slot. In Pattern Mode, loops the current pattern.
+*   **F7 / ESC**: **Stop & Panic.** Stops playback, resets the cursor to Row 00, and silences all hardware voices immediately.
+*   **F8**: **Toggle Playback Mode.** Switch between **PATTERN** (loops current patterns) and **SONG** (follows the Sequence Order List).
+
+### 4. Editing & Grid Commands
+*   **Spacebar**: Toggle **Edit Mode**.
+    *   *Blue Cursor:* Navigation only. Piano keys play sounds for preview.
+    *   *Red Cursor:* Record Mode. Piano keys enter data and auto-advance.
 *   **Backspace / Delete**: Clear the current cell.
 *   **Tilde ( ` )**: Insert **Note Off** (`===`).
-*   **F5**: **Instrument Pick.** Samples the instrument ID from the grid into your global brush.
+*   **- / =**: **Transpose** the note in the current cell by **1 semitone**.
+*   **SHIFT + - / =**: **Transpose** the current cell by **12 semitones (1 Octave)**.
+*   **SHIFT + F3 / F4**: Change the **Instrument** of the current cell only.
+*   **SHIFT + [ / ]**: Adjust the **Volume** of the current cell only.
 
-### 5. Live Recording
-*   **F6 (Play) + Space (Edit):** Enables Live Recording.
-*   Play notes on the keyboard while the sequence is running to capture them into the grid in real-time.
-*   Move the cursor with **Arrows** while playing to jump between channels for multi-track jamming.
+### 5. Pattern & Sequence Management
+*   **F9 / F10**: Jump to Previous / Next **Pattern ID**.
+*   **F11 / F12**: Jump to Previous / Next **Sequence Slot** (Playlist position).
+*   **SHIFT + F11 / F12**: Change the **Pattern ID** assigned to the current Sequence Slot.
+*   **ALT + F11 / F12**: Decrease / Increase total **Song Length**.
 
-### 7. Transposition & Octave
-*   **F1 / F2**: Decrease / Increase global keyboard **Octave** (The Brush).
-*   **- / =**: Transpose the current cell down/up by **1 semitone**.
-*   **SHIFT + - / =**: Transpose the current cell down/up by **12 semitones (1 Octave)**.
+### 6. Clipboard & Files
+*   **Ctrl + C**: **Copy** the current 32-row pattern to the internal RAM clipboard.
+*   **Ctrl + V**: **Paste** the clipboard into the current pattern (overwrites existing data).
+*   **Ctrl + S**: **Save Song.** Opens a dialog to save the current song to the USB drive as an `.RPT` file.
+*   **Ctrl + O**: **Load Song.** Opens a dialog to load an `.RPT` file from the USB drive.
 
 ---
 
 ## 🖥 User Interface Guide
 
-### Dashboard & Grid
-The screen is split into a **Dashboard** (top) and the **Pattern Grid** (bottom).
-*   **Blue Cursor:** Navigation Mode.
-*   **Red Cursor:** Record Mode.
-*   **Yellow Glow:** Highlights the active data cell (Note, Instrument, or Volume).
-*   **Dark Grey Bars:** Every 4th row is highlighted (Row 0, 4, 8, etc.) to help track musical bars.
+### The Dashboard (Top)
+The top 27 rows provide a real-time view of the synthesizer and sequencer state:
+*   **Status Bar:** Displays current Mode, Octave, Instrument name, Volume, and Sequencer status.
+*   **Sequence Row:** A horizontal view of your song structure (e.g., `00 00 01 02`). The active slot is highlighted in **Yellow**.
+*   **Operator Panels:** Shows the 11 raw OPL2 registers for the currently selected instrument (Modulator and Carrier).
+*   **Channel Meters:** Visual bars that react to note volume and decay over time.
+*   **System Panel:** Displays active hardware (Native OPL2 vs FPGA) and CPU speed.
 
-### Syntax Highlighting
-*   **White:** Musical Notes (e.g., `C-4`).
-*   **Muted Purple:** Instrument Index (00-FF).
-*   **Muted Green:** Volume Level (00-3F).
-*   **Cyan:** Headers and Row Numbers.
+### The Grid (Bottom)
+The pattern grid starts at **Row 28**.
+*   **Dark Grey Bars:** Highlights every 4th row (0, 4, 8, etc.) to indicate the musical beat.
+*   **Syntax Highlighting:**
+    *   **White:** Musical Notes.
+    *   **Muted Purple:** Instrument IDs.
+    *   **Sage Green:** Volume Levels.
+    *   **Cyan:** Dividers and Row Numbers.
 
 ---
 
-*Developed for the RP6502 Picocomputer Project.*
+## 🛠 Memory Architecture & Technicals
+
+*   **Pattern Data (XRAM $0000):** 16 patterns max. Each pattern is 32 rows × 9 channels × 4 bytes (1,152 bytes per pattern).
+*   **Sequence Order (XRAM $B000):** 256-byte playlist for song structure.
+*   **Video Buffer (XRAM $C000):** VGA Mode 1 (80x60 Text, 3-bytes per character).
+*   **Instrument Library (RAM):** 256 AdLib-compatible patches (4KB) stored in 6502 main memory.
+*   **Keyboard Bitmask (XRAM $EF00):** High-speed input reading via RIA portals.
+
+---
+*Created by Jason Rowe. Developed for the RP6502 Picocomputer Project.*
