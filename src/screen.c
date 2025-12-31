@@ -272,7 +272,15 @@ void draw_ui_dashboard(void) {
     draw_string(0, 17, h_line, HUD_COL_DARKGREY, HUD_COL_BG);
 
     // 2. Static Labels (Rows 1-4)
-    draw_string(2, 1, "RP6502 TRACKER v0.1  [ FILE: UNTITLED.RPT ]", HUD_COL_WHITE, HUD_COL_BG);
+    // draw_string(2, 1, "RP6502 TRACKER v0.1  [ FILE: UNTITLED.RPT ]", HUD_COL_WHITE, HUD_COL_BG);
+    draw_string(2, 1, "RP6502 TRACKER v0.1  [ FILE: ", HUD_COL_WHITE, HUD_COL_BG);
+    // Draw the actual filename in a distinct color (Cyan looks good here)
+    draw_string(31, 1, active_filename, HUD_COL_CYAN, HUD_COL_BG);
+    // Close the bracket
+    // Note: Column 31 + 12 (max filename) = 43. 
+    draw_string(31 + 13, 1, " ]", HUD_COL_WHITE, HUD_COL_BG);
+    
+    
     draw_string(55, 1, "BPM: 150  TKS: 00", HUD_COL_CYAN, HUD_COL_BG);
 
     draw_string(2, 3, "MODE: [       ]  OCT:    INS:    (                  )  VOL:    REC: ", HUD_COL_CYAN, HUD_COL_BG);
@@ -299,18 +307,39 @@ void draw_ui_dashboard(void) {
     draw_string(55, 7, "[ CHANNEL METERS ]", HUD_COL_YELLOW, HUD_COL_BG);
 
     // 4. Cheatsheet & System Info (New Space)
+    // draw_string(1, 20, "[ COMMAND CHEATSHEET ]", HUD_COL_YELLOW, HUD_COL_BG);
+    // draw_string(2, 21, "F1/F2: Octave  F3/F4: Ins   F5: Pick  F6: Play", HUD_COL_CYAN, HUD_COL_BG);
+    // draw_string(2, 22, "F8: Mode    F9/10: Pattern  F11/12: Sequence", HUD_COL_CYAN, HUD_COL_BG);
+    // draw_string(2, 23, "[ / ]: Vol  - / =: Transp.  Space: Record", HUD_COL_CYAN, HUD_COL_BG);
+    // draw_string(2, 24, "Ctrl+C: Copy Pat  Ctrl+V: Paste Pat", HUD_COL_CYAN, HUD_COL_BG);
+    // draw_string(2, 25, "Ctrl+S: Save  Ctrl+O: Load  Esc: Panic", HUD_COL_CYAN, HUD_COL_BG);
+
+    // Row 20: Title
     draw_string(1, 20, "[ COMMAND CHEATSHEET ]", HUD_COL_YELLOW, HUD_COL_BG);
-    draw_string(2, 21, "F1/F2: Octave  F3/F4: Ins   F5: Pick  F6: Play", HUD_COL_CYAN, HUD_COL_BG);
-    draw_string(2, 22, "F8: Mode    F9/10: Pattern  F11/12: Sequence", HUD_COL_CYAN, HUD_COL_BG);
-    draw_string(2, 23, "[ / ]: Vol  - / =: Transp.  Space: Record", HUD_COL_CYAN, HUD_COL_BG);
-    draw_string(2, 24, "Ctrl+C: Copy Pat  Ctrl+V: Paste Pat", HUD_COL_CYAN, HUD_COL_BG);
+
+    // Columns:  Column 1 (Pos 2)       Column 2 (Pos 28)       Column 3 (Pos 54)
+    // Row 21: Performance              Sequencing              Editing
+    draw_string(2, 21, "F1/F2 : Octave      F8    : Mode         - / =  : Transpose", HUD_COL_CYAN, HUD_COL_BG);
+    draw_string(2, 22, "F3/F4 : Instrument  F9/10 : Pattern      [ / ]  : Volume",    HUD_COL_CYAN, HUD_COL_BG);
+    draw_string(2, 23, "F5    : Pick Ins    F11/12: Sequence     Space  : Record",    HUD_COL_CYAN, HUD_COL_BG);
     
-    draw_string(55, 20, "[ SYSTEM ]", HUD_COL_YELLOW, HUD_COL_BG);
-    draw_string(56, 21, "CPU: 8.0MHz", HUD_COL_WHITE, HUD_COL_BG);
+    // Row 24: Transport                Clipboard               Files/System
+    draw_string(2, 24, "F6/F7 : Play/Stop   Ctrl+C: Copy Pat     Ctrl+S : Save Song", HUD_COL_CYAN, HUD_COL_BG);
+    draw_string(2, 25, "Esc   : Panic       Ctrl+V: Paste Pat    Ctrl+O : Load Song", HUD_COL_CYAN, HUD_COL_BG);
+
+    // Optional: Make the Keys White to make them stand out from the labels
+    for (uint8_t r = 21; r <= 25; r++) {
+        set_text_color(2,  r, 7, HUD_COL_WHITE, HUD_COL_BG); // Col 1 Keys
+        set_text_color(22, r, 7, HUD_COL_WHITE, HUD_COL_BG); // Col 2 Keys
+        set_text_color(43, r, 7, HUD_COL_WHITE, HUD_COL_BG); // Col 3 Keys
+    }
+    
+    draw_string(65, 20, "[ SYSTEM ]", HUD_COL_YELLOW, HUD_COL_BG);
+    draw_string(66, 21, "CPU: 8.0MHz", HUD_COL_WHITE, HUD_COL_BG);
     #ifdef USE_NATIVE_OPL2
-        draw_string(56, 22, "OPL: NATIVE", HUD_COL_WHITE, HUD_COL_BG);
+        draw_string(66, 22, "OPL: NATIVE", HUD_COL_WHITE, HUD_COL_BG);
     #else
-        draw_string(56, 22, "OPL: FPGA  ", HUD_COL_WHITE, HUD_COL_BG);
+        draw_string(66, 22, "OPL: FPGA  ", HUD_COL_WHITE, HUD_COL_BG);
     #endif
 }
 
