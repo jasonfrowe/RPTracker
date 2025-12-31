@@ -4,7 +4,7 @@
 **RPTracker** is a high-performance music composition tool designed for the [RP6502 Picocomputer](https://github.com/picocomputer). It features a 640x480 VGA interface and targets both the **Native RIA OPL2** emulation and the **FPGA OPL2** sound card. It provides a classic "tracker" workflow with modern high-resolution visual feedback.
 
 
-![Title Screen](images/Tracker_Title.png)
+![Screen Shot](images/Tracker_screenshot.png)
 
 ---
 
