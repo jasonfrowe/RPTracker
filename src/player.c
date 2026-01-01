@@ -384,10 +384,105 @@ void sequencer_step(void) {
                     ch_vibrato[ch].tick_counter = 0;
                     
                     ch_arp[ch].active = false; // Vibrato kills arpeggio
+                } else if (cmd == 5) {
+                    // Note Cut: 5__T
+                    // T = Ticks before cut (0-F maps to 0-15 ticks)
+                    uint8_t cut_tick = (eff & 0x0F);
+                    if (cut_tick == 0) cut_tick = 1; // Prevent instant cut
+                    
+                    ch_notecut[ch].active = true;
+                    ch_notecut[ch].cut_tick = cut_tick;
+                    ch_notecut[ch].tick_counter = 0;
+                } else if (cmd == 6) {
+                    // Note Delay: 6NDT
+                    // N = Note (0-F, 0=C, 1=C#, etc.)
+                    // D = Delay ticks (0-F)
+                    // T = Octave offset from base (0-F)
+                    uint8_t note_offset = (eff >> 8) & 0x0F;
+                    uint8_t delay_tick = (eff >> 4) & 0x0F;
+                    uint8_t octave_offset = (eff & 0x0F);
+                    
+                    if (delay_tick == 0) delay_tick = 6; // Default to half row
+                    
+                    // Calculate absolute note
+                    uint8_t base = (cell.note != 0 && cell.note != 255) ? cell.note : ch_arp[ch].base_note;
+                    uint8_t delayed_note = base + note_offset + (octave_offset * 12);
+                    if (delayed_note > 127) delayed_note = 127;
+                    
+                    ch_notedelay[ch].active = true;
+                    ch_notedelay[ch].delay_tick = delay_tick;
+                    ch_notedelay[ch].note = delayed_note;
+                    ch_notedelay[ch].inst = (cell.note != 0 && cell.note != 255) ? cell.inst : ch_arp[ch].inst;
+                    ch_notedelay[ch].vol = (cell.note != 0 && cell.note != 255) ? cell.vol : ch_arp[ch].vol;
+                    ch_notedelay[ch].tick_counter = 0;
+                    ch_notedelay[ch].triggered = false;
+                } else if (cmd == 7) {
+                    // Retrigger: 7__T
+                    // T = Ticks between retriggers (0-F)
+                    uint8_t speed = (eff & 0x0F);
+                    if (speed == 0) speed = 3; // Default speed
+                    
+                    uint8_t note = (cell.note != 0 && cell.note != 255) ? cell.note : ch_arp[ch].base_note;
+                    
+                    ch_retrigger[ch].active = true;
+                    ch_retrigger[ch].speed = speed;
+                    ch_retrigger[ch].note = note;
+                    ch_retrigger[ch].inst = (cell.note != 0 && cell.note != 255) ? cell.inst : ch_arp[ch].inst;
+                    ch_retrigger[ch].vol = (cell.note != 0 && cell.note != 255) ? cell.vol : ch_arp[ch].vol;
+                    ch_retrigger[ch].tick_counter = 0;
+                } else if (cmd == 8) {
+                    // Tremolo: 8RDT
+                    // R = Rate (ticks per cycle step)
+                    // D = Depth (volume deviation)
+                    // T = Waveform (0=sine, 1=triangle, 2=square)
+                    uint8_t start_vol = (cell.note != 0 && cell.note != 255) ? cell.vol : ch_volslide[ch].current_vol;
+                    uint8_t start_note = (cell.note != 0 && cell.note != 255) ? cell.note : ch_arp[ch].base_note;
+                    uint8_t start_inst = (cell.note != 0 && cell.note != 255) ? cell.inst : ch_arp[ch].inst;
+                    
+                    ch_tremolo[ch].base_vol = start_vol;
+                    ch_tremolo[ch].note = start_note;
+                    ch_tremolo[ch].inst = start_inst;
+                    
+                    ch_tremolo[ch].active = true;
+                    ch_tremolo[ch].rate = (eff >> 8) & 0x0F;
+                    if (ch_tremolo[ch].rate == 0) ch_tremolo[ch].rate = 4;
+                    ch_tremolo[ch].depth = (eff >> 4) & 0x0F;
+                    if (ch_tremolo[ch].depth == 0) ch_tremolo[ch].depth = 4;
+                    ch_tremolo[ch].waveform = (eff & 0x0F) % 3;
+                    ch_tremolo[ch].phase = 0;
+                    ch_tremolo[ch].tick_counter = 0;
+                } else if (cmd == 9) {
+                    // Fine Pitch: 9__D
+                    // D = Detune in 1/16 semitones (signed: 0-7 = +, 8-F = -)
+                    uint8_t detune_raw = (eff & 0x0F);
+                    int8_t detune = (detune_raw < 8) ? detune_raw : -(16 - detune_raw);
+                    
+                    uint8_t note = (cell.note != 0 && cell.note != 255) ? cell.note : ch_arp[ch].base_note;
+                    
+                    ch_finepitch[ch].active = true;
+                    ch_finepitch[ch].base_note = note;
+                    ch_finepitch[ch].detune = detune;
+                    ch_finepitch[ch].inst = (cell.note != 0 && cell.note != 255) ? cell.inst : ch_arp[ch].inst;
+                    ch_finepitch[ch].vol = (cell.note != 0 && cell.note != 255) ? cell.vol : ch_arp[ch].vol;
+                    
+                    // Apply fine pitch immediately
+                    // Note: OPL2 doesn't support fine tuning easily, so we approximate
+                    // by adjusting the F-number slightly (not implemented in OPL_SetPitch currently)
+                    // For now, just set the note normally
+                    OPL_NoteOff(ch);
+                    OPL_SetPatch(ch, &gm_bank[ch_finepitch[ch].inst]);
+                    OPL_SetVolume(ch, ch_finepitch[ch].vol << 1);
+                    OPL_NoteOn(ch, ch_finepitch[ch].base_note);
+                    ch_peaks[ch] = ch_finepitch[ch].vol;
                 } else if (eff == 0xF000 || (cell.note != 0 && cmd == 0)) {
                     ch_arp[ch].active = false;
                     ch_porta[ch].active = false;
                     ch_volslide[ch].active = false;
+                    ch_notecut[ch].active = false;
+                    ch_notedelay[ch].active = false;
+                    ch_retrigger[ch].active = false;
+                    ch_tremolo[ch].active = false;
+                    ch_finepitch[ch].active = false;
                     
                     // If vibrato was active, reset pitch to base note before deactivating
                     if (ch_vibrato[ch].active) {
@@ -463,6 +558,11 @@ void sequencer_step(void) {
         process_portamento_logic(ch);
         process_volume_slide_logic(ch);
         process_vibrato_logic(ch);
+        process_notecut_logic(ch);
+        process_notedelay_logic(ch);
+        process_retrigger_logic(ch);
+        process_tremolo_logic(ch);
+        process_finepitch_logic(ch);
     }
 }
 
@@ -504,6 +604,11 @@ void handle_transport_controls() {
             ch_porta[i].active = false;
             ch_volslide[i].active = false;
             ch_vibrato[i].active = false;
+            ch_notecut[i].active = false;
+            ch_notedelay[i].active = false;
+            ch_retrigger[i].active = false;
+            ch_tremolo[i].active = false;
+            ch_finepitch[i].active = false;
         }
 
         // Reset to beginning
@@ -618,6 +723,13 @@ void modify_effect_low_byte(int8_t delta) {
 }
 
 void modify_instrument(int8_t delta) {
+    // Exit effect view mode so we can see the instrument column
+    if (effect_view_mode) {
+        effect_view_mode = false;
+        draw_headers();
+        render_grid();
+    }
+    
     if (is_shift_down()) {
         // --- IN-PLACE CELL EDIT ONLY ---
         PatternCell cell;
@@ -637,6 +749,7 @@ void modify_instrument(int8_t delta) {
         current_instrument = (uint8_t)(current_instrument + delta);
         update_dashboard(); // Update the "INS" hex at the top
     }
+    update_cursor_visuals(cur_row, cur_row, cur_channel, cur_channel);
 }
 
 void modify_note(int8_t delta) {

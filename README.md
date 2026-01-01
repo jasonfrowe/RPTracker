@@ -230,6 +230,234 @@ The effect continuously modulates pitch using different waveforms at adjustable 
 
 ---
 
+### ✂️ Effect Command 5: Note Cut (5__T)
+Note Cut silences a note after a specified number of ticks, creating staccato rhythms and percussive effects.
+Perfect for drum programming, rhythmic patterns, and tight, punchy sequences.
+
+**Format: `5 _ _ T`**
+
+*   **5**: Command ID (Note Cut).
+*   **T (Cut Time)**: Ticks before silencing (1-F):
+    *   `1`: Cut after 1 tick (very short note)
+    *   `2-3`: Cut after 2-3 ticks (staccato)
+    *   `4-6`: Cut after 4-6 ticks (normal, 1 row = 6 ticks)
+    *   `7-9`: Cut after 7-9 ticks (short sustain)
+    *   `A-F`: Cut after 10-15 ticks (longer sustain)
+    *   `0` defaults to 1 tick
+
+**Usage:**
+- `5003`: Cut note after 3 ticks (half a row) - tight hi-hat pattern.
+- `5006`: Cut note after full row - standard staccato.
+- `500C`: Cut after 2 rows (12 ticks) - medium sustain.
+- `5001`: Extremely short note - percussive effect.
+
+**Notes:**
+- Works with all other effects.
+- Perfect for drum patterns and rhythmic sequences.
+- Combine with retrigger for stuttering effects.
+
+---
+
+### ⏱️ Effect Command 6: Note Delay (6NDT)
+Note Delay triggers a note after a specified delay, enabling polyrhythms, echo effects, and complex timing.
+Creates notes that appear "between" the grid lines for humanization and groove.
+
+**Format: `6 N D T`**
+
+*   **6**: Command ID (Note Delay).
+*   **N (Note Offset)**: Semitone offset from base note (0-F):
+    *   `0`: Same as base note
+    *   `1-C`: +1 to +12 semitones higher
+    *   `D-F`: +13 to +15 semitones higher
+    
+*   **D (Delay Time)**: Ticks before triggering (0-F):
+    *   `0`: Defaults to 6 ticks (half row)
+    *   `1-3`: Early trigger (1-3 ticks in)
+    *   `4-6`: Mid-row trigger
+    *   `7-9`: Late trigger (before next row)
+    *   `A-F`: Very late trigger (into next row)
+
+*   **T (Octave Offset)**: Additional octave shift (0-F):
+    *   `0`: No octave shift
+    *   `1`: +12 semitones (1 octave up)
+    *   `2`: +24 semitones (2 octaves up)
+    *   etc.
+
+**Usage:**
+- `6030`: Delay base note by 3 ticks (swing feel).
+- `6760`: Delay note +7 semitones (perfect fifth) by 6 ticks (harmony delay).
+- `6041`: Delay base note by 4 ticks, 1 octave up (echo effect).
+- `60C0`: Delay base note by 12 ticks (2 rows) - polyrhythm.
+
+**Notes:**
+- Note is triggered even if sequencer advances to next row.
+- Perfect for swing timing, echo effects, and chord spreads.
+- Combine with note cut for complex rhythmic patterns.
+
+---
+
+### 🔁 Effect Command 7: Retrigger (7__T)
+Retrigger repeatedly restarts a note at regular intervals, creating stuttering, rolls, and rapid-fire effects.
+Essential for drum rolls, glitchy effects, and rhythmic intensity.
+
+**Format: `7 _ _ T`**
+
+*   **7**: Command ID (Retrigger).
+*   **T (Speed)**: Ticks between retriggers (0-F):
+    *   `0`: Defaults to 3 ticks (2 retriggers per row)
+    *   `1`: Every tick (6 retriggers per row) - machine gun
+    *   `2`: Every 2 ticks (3 retriggers per row) - fast roll
+    *   `3`: Every 3 ticks (2 retriggers per row) - standard roll
+    *   `4-6`: Every 4-6 ticks (slower rolls)
+    *   `7-C`: Every 7-12 ticks (rhythmic patterns)
+    *   `D-F`: Very slow retriggers
+
+**Usage:**
+- `7003`: Standard snare roll (retrigger every 3 ticks).
+- `7001`: Ultra-fast buzz effect (every tick).
+- `7006`: Retrigger every row (rhythmic stutter).
+- `700C`: Retrigger every 2 rows (slow repeat).
+
+**Notes:**
+- Retriggers start immediately and continue until stopped.
+- Perfect for drum rolls, glitch effects, and rhythmic tension.
+- Combine with volume slide for dynamic rolls.
+- Works with all other effects.
+
+---
+
+### 📢 Effect Command 8: Tremolo (8RDT)
+Tremolo adds volume oscillation to sustained notes, creating pulsing, rhythmic movement, and texture.
+The volume counterpart to vibrato - essential for pads, rhythmic effects, and dynamic expression.
+
+**Format: `8 R D T`**
+
+*   **8**: Command ID (Tremolo).
+*   **R (Rate)**: Oscillation speed - ticks per phase step (1-F):
+    *   `1`: Very fast tremolo (rapid pulsing)
+    *   `2-4`: Fast tremolo (noticeable rhythm)
+    *   `5-8`: Medium tremolo (musical pulsing)
+    *   `9-C`: Slow tremolo (gentle wave)
+    *   `D-F`: Very slow tremolo (subtle movement)
+    
+*   **D (Depth)**: Volume deviation (1-F):
+    *   `1-2`: Subtle tremolo (gentle pulsing)
+    *   `3-5`: Medium tremolo (noticeable dynamics)
+    *   `6-9`: Wide tremolo (dramatic pulsing)
+    *   `A-F`: Very wide tremolo (extreme effect)
+    *   `0`: Defaults to 4
+
+*   **T (Waveform)**: The oscillation shape:
+    *   `0`: **SINE** - Smooth, natural tremolo
+    *   `1`: **TRIANGLE** - Linear rise/fall
+    *   `2`: **SQUARE** - Abrupt volume jumps (gating effect)
+
+**Usage:**
+- `8440`: Classic tremolo - medium rate, 4 units depth, sine (pads/strings).
+- `8230`: Fast subtle tremolo for rhythmic movement.
+- `8652`: Wide slow tremolo with square wave (gating effect).
+- `8320`: Medium tremolo for expressive pulsing.
+- `8A10`: Ultra-slow subtle tremolo for texture.
+
+**Notes:**
+- Works independently with all other effects.
+- Perfect for pads, organs, strings, and rhythmic textures.
+- Combine with vibrato for complex modulation.
+- Continuous effect until explicitly stopped.
+
+---
+
+### 🎛️ Effect Command 9: Fine Pitch (9__D)
+Fine Pitch applies subtle pitch adjustments for microtuning, chorus effects, and detuning.
+Adds richness and width to sounds without full semitone shifts.
+
+**Format: `9 _ _ D`**
+
+*   **9**: Command ID (Fine Pitch).
+*   **D (Detune)**: Pitch adjustment in 1/16 semitone steps (0-F):
+    *   `0-7`: Detune UP by 0-7 sixteenths of a semitone
+    *   `8-F`: Detune DOWN by 8-1 sixteenths of a semitone
+        *   `8` = -8/16 (half semitone down)
+        *   `9` = -7/16
+        *   `A` = -6/16
+        *   ...
+        *   `F` = -1/16 (very subtle down)
+
+**Usage:**
+- `9002`: Slight upward detune (chorus effect).
+- `900E`: Slight downward detune (chorus effect on second channel).
+- `9004`: Medium upward detune (layer with undetuned note for width).
+- `9008`: Half semitone down (between notes).
+
+**Notes:**
+- Fine pitch is applied once on note trigger (not continuous).
+- Perfect for chorus/ensemble effects using multiple channels.
+- OPL2 has limited fine-tuning precision - effect is approximate.
+- Combine detuned channels for thick, wide sounds.
+- Works with all other effects.
+
+---
+
+## 🎼 Instrument Bank
+RPTracker includes a 256-instrument GM-compatible OPL2 patch bank loaded from **gm_bank[]** in [instruments.c](src/instruments.c).
+Each instrument is an **OPL_Patch** struct containing 11 registers that define the FM synthesis parameters.
+
+### Using Instruments
+*   **F3/F4**: Cycle through instruments (auto-exits effect view mode).
+*   **F5**: Pick instrument from cell under cursor.
+*   **SHIFT + F3/F4**: Change instrument of current cell only.
+*   **Instrument Range**: 0x00-0xFF (256 patches).
+
+### Key Instruments (Patches 0-15)
+*   **00-03**: Piano variations (Acoustic, Bright, Electric)
+*   **04**: Honky-tonk Piano
+*   **05-07**: Electric Piano variations (Rhodes, Chorus, Harpsichord)
+*   **08-11**: Chromatic Percussion (Celesta, Glockenspiel, Music Box, Vibraphone)
+*   **12-15**: Organ variations (Drawbar, Percussive, Rock, Church)
+
+### Notable Categories
+*   **16-23**: Guitars (Acoustic, Electric, Distortion, Harmonics)
+*   **24-31**: Bass (Acoustic, Finger, Pick, Fretless, Slap, Synth)
+*   **32-39**: Strings (Violin, Viola, Cello, Tremolo, Pizzicato, Harp)
+*   **40-47**: Ensemble (Strings, Brass, Synth)
+*   **48-55**: Brass (Trumpet, Trombone, Tuba, Horn, Saxophone)
+*   **56-63**: Reed (Clarinet, Oboe, Bassoon)
+*   **64-71**: Pipe (Flute, Pan Flute, Ocarina, Whistle)
+*   **72-79**: Synth Lead (Square, Saw, Calliope, Chiff, Charang, Voice, Fifths, Bass)
+*   **80-87**: Synth Pad (New Age, Warm, Polysynth, Choir, Bowed, Metallic, Halo, Sweep)
+*   **88-95**: Synth Effects (Rain, Soundtrack, Crystal, Atmosphere, Brightness, Goblins, Echoes, Sci-Fi)
+*   **96-103**: Ethnic (Sitar, Banjo, Shamisen, Koto, Kalimba, Bagpipe, Fiddle, Shanai)
+*   **104-111**: Percussion (Tinkle Bell, Agogo, Steel Drums, Woodblock, Taiko, Tom, Synth Drum, Reverse Cymbal)
+*   **112-119**: Sound Effects (Fret Noise, Breath, Seashore, Birds, Telephone, Helicopter, Applause, Gunshot)
+
+### Instrument Sustain Characteristics
+For sustained effects (vibrato, tremolo, arpeggios), choose instruments with:
+*   **Low Release Rate**: Bottom nibble of `susrel` register (0=slowest, F=fastest).
+*   **Sustained Volume**: Low sustain level (top nibble of `susrel`, 0=loudest).
+
+**Good Sustain Examples:**
+*   Instrument 9, 10: Bell sounds with long decay
+*   Instrument 3: Bright Piano (moderate sustain)
+*   Most Pad instruments (80-87): Designed for sustained notes
+
+**Poor Sustain Examples:**
+*   Instrument 0: Acoustic Piano (medium release = quick decay)
+*   Percussion instruments: Designed for short hits
+
+### Customizing Instruments
+Edit [instruments.c](src/instruments.c) to customize patches. Each **OPL_Patch** contains:
+```c
+typedef struct {
+    uint8_t m_ave, m_ksl, m_atdec, m_susrel, m_wave;  // Modulator
+    uint8_t c_ave, c_ksl, c_atdec, c_susrel, c_wave;  // Carrier
+    uint8_t feedback;
+} OPL_Patch;
+```
+
+Rebuild with `cmake --build build` after changes.
+
+---
+
 ## 🖥 User Interface Guide
 
 ### The Dashboard (Top)

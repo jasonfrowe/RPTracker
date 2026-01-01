@@ -12,6 +12,11 @@ ArpState ch_arp[9];
 PortamentoState ch_porta[9];
 VolumeSlideState ch_volslide[9];
 VibratoState ch_vibrato[9];
+NoteCutState ch_notecut[9];
+NoteDelayState ch_notedelay[9];
+RetriggerState ch_retrigger[9];
+TremoloState ch_tremolo[9];
+FinePitchState ch_finepitch[9];
 
 const uint8_t arp_tick_lut[16] = {
     1, 2, 3, 6, 9, 12, 18, 24, 30, 36, 42, 48, 60, 72, 84, 96
@@ -295,4 +300,108 @@ void process_vibrato_logic(uint8_t ch) {
     // Change pitch without retriggering note
     OPL_SetPitch(ch, (uint8_t)new_note);
     // Volume stays the same, no need to update
+}
+
+void process_notecut_logic(uint8_t ch) {
+    if (!ch_notecut[ch].active) return;
+    
+    ch_notecut[ch].tick_counter++;
+    
+    if (ch_notecut[ch].tick_counter >= ch_notecut[ch].cut_tick) {
+        OPL_NoteOff(ch);
+        ch_peaks[ch] = 0;
+        ch_notecut[ch].active = false;
+    }
+}
+
+void process_notedelay_logic(uint8_t ch) {
+    if (!ch_notedelay[ch].active || ch_notedelay[ch].triggered) return;
+    
+    ch_notedelay[ch].tick_counter++;
+    
+    if (ch_notedelay[ch].tick_counter >= ch_notedelay[ch].delay_tick) {
+        OPL_NoteOff(ch);
+        OPL_SetPatch(ch, &gm_bank[ch_notedelay[ch].inst]);
+        OPL_SetVolume(ch, ch_notedelay[ch].vol << 1);
+        OPL_NoteOn(ch, ch_notedelay[ch].note);
+        ch_peaks[ch] = ch_notedelay[ch].vol;
+        ch_notedelay[ch].triggered = true;
+    }
+}
+
+void process_retrigger_logic(uint8_t ch) {
+    if (!ch_retrigger[ch].active) return;
+    
+    ch_retrigger[ch].tick_counter++;
+    
+    if (ch_retrigger[ch].tick_counter >= ch_retrigger[ch].speed) {
+        ch_retrigger[ch].tick_counter = 0;
+        
+        OPL_NoteOff(ch);
+        OPL_SetPatch(ch, &gm_bank[ch_retrigger[ch].inst]);
+        OPL_SetVolume(ch, ch_retrigger[ch].vol << 1);
+        OPL_NoteOn(ch, ch_retrigger[ch].note);
+        ch_peaks[ch] = ch_retrigger[ch].vol;
+    }
+}
+
+void process_tremolo_logic(uint8_t ch) {
+    if (!ch_tremolo[ch].active) return;
+    
+    ch_tremolo[ch].tick_counter++;
+    
+    if (ch_tremolo[ch].tick_counter < ch_tremolo[ch].rate) return;
+    ch_tremolo[ch].tick_counter = 0;
+    
+    ch_tremolo[ch].phase += 32;
+    
+    // Calculate volume offset based on waveform
+    int8_t offset = 0;
+    uint8_t phase = ch_tremolo[ch].phase;
+    uint8_t depth = ch_tremolo[ch].depth;
+    
+    if (depth == 0) depth = 4;
+    
+    switch (ch_tremolo[ch].waveform) {
+        case 0: // Sine wave
+            if (phase < 64) {
+                offset = (phase * depth) / 64;
+            } else if (phase < 128) {
+                offset = (((127 - phase) * depth) / 64);
+            } else if (phase < 192) {
+                offset = -((phase - 128) * depth) / 64;
+            } else {
+                offset = -(((255 - phase) * depth) / 64);
+            }
+            break;
+            
+        case 1: // Triangle wave
+            if (phase < 128) {
+                offset = (phase * depth) / 128;
+            } else {
+                offset = (((255 - phase) * depth) / 128);
+            }
+            offset -= depth / 2;
+            break;
+            
+        case 2: // Square wave
+            offset = (phase < 128) ? depth : -depth;
+            break;
+    }
+    
+    // Apply volume offset
+    int16_t new_vol = (int16_t)ch_tremolo[ch].base_vol + offset;
+    if (new_vol < 0) new_vol = 0;
+    if (new_vol > 63) new_vol = 63;
+    
+    OPL_SetVolume(ch, (uint8_t)new_vol << 1);
+    ch_peaks[ch] = (uint8_t)new_vol;
+}
+
+void process_finepitch_logic(uint8_t ch) {
+    if (!ch_finepitch[ch].active) return;
+    
+    // Fine pitch is applied once on trigger, not per-tick
+    // The detune is handled by OPL frequency offset
+    // This is a no-op per-tick processor (effect is instant)
 }
