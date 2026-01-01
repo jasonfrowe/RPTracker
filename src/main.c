@@ -61,7 +61,7 @@ void init_patterns(void) {
     RIA.step0 = 1;
     
     // Clear up to 0xC000 (49,152 bytes).  This is space reserved for patterns.
-    for (uint16_t i = 0; i < 49152; i++) {
+    for (uint16_t i = 0; i < 49152U; i++) {
         RIA.rw0 = 0; 
     }
 }

@@ -253,8 +253,9 @@ void draw_headers() {
     //          0        1         2         3         4         5         6         7         8
     // Line Num 123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
     // Header:  RN |  CH 0 |  CH 1 |  CH 2 |  CH 3 |  CH 4 |  CH 5 |  CH 6 |  CH 7 |  CH 8 |
+
     draw_string(0, 27, "RN |  CH 0 |  CH 1 |  CH 2 |  CH 3 |  CH 4 |  CH 5 |  CH 6 |  CH 7 |  CH 8 |", 
-                HUD_COL_CYAN, HUD_COL_BG);
+                    HUD_COL_CYAN, HUD_COL_BG);
 }
 
 void clear_top_ui() {

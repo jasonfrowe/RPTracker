@@ -82,38 +82,20 @@ void update_order_display() {
 
 void save_song(const char* filename) {
     int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC);
-    if (fd < 0) {
-        printf("Error: Open failed\n");
-        return;
-    }
+    if (fd < 0) return;
 
-    // 1. Save Metadata (8 bytes from 6502 RAM)
-    write(fd, "RPT1", 4);
+    write(fd, "RPT2", 4); // New Version Identifier
     write(fd, &current_octave, 1);
     write(fd, &current_volume, 1);
     write(fd, &song_length, 2);
 
-    // 2. Save Patterns from XRAM $0000 (18432 bytes)
-    // The SDK function write_xram handles the busy-wait and opcodes for you!
-    if (write_xram(0x0000, 0x4800, fd) < 0) {
-        printf("Error writing patterns\n");
-    }
+    // Save all 32 patterns ($B400 bytes)
+    write_xram(0x0000, 0xB400, fd); 
 
-    // 3. Save Order List from XRAM $B000 (256 bytes)
-    if (write_xram(0xB000, 0x0100, fd) < 0) {
-        printf("Error writing sequence\n");
-    }
+    // Save the 256-step Sequence Order (at $B400)
+    write_xram(0xB400, 0x0100, fd);
 
     close(fd);
-
-    // Update the active filename global
-    strncpy(active_filename, filename, 12);
-    active_filename[12] = '\0';
-
-    // Refresh everything
-    refresh_all_ui(); 
-
-    printf("Saved: %s\n", filename);
 }
 
 void load_song(const char* filename) {
@@ -137,8 +119,8 @@ void load_song(const char* filename) {
 
     // Load bulk data directly back into XRAM
     // read_xram handles the busy-wait internally
-    read_xram(0x0000, 0x4800, fd);
-    read_xram(0xB000, 0x0100, fd);
+    read_xram(0x0000, 0xB400, fd);
+    read_xram(0xB400, 0x0100, fd);
 
     // Update the active filename global
     strncpy(active_filename, filename, 12);

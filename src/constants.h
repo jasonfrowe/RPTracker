@@ -11,7 +11,7 @@
 #define MESSAGE_LENGTH (MESSAGE_WIDTH * MESSAGE_HEIGHT) // Total number of characters in the message area
 #define BYTES_PER_CHAR 3            // Number of bytes per character in text RAM
 
-#define MAX_PATTERNS 16 // Maximum number of patterns
+#define MAX_PATTERNS 32 // Maximum number of patterns
 
 #define TEXT_CONFIG 0xC000          // Text Plane Configuration
 extern unsigned text_message_addr; // Address where text message starts in XRAM

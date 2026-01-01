@@ -15,8 +15,15 @@ uint8_t active_midi_note = 0;      // Tracks the currently playing note
 uint8_t current_volume = 63; // Max volume (0x3F)
 
 uint16_t get_pattern_xram_addr(uint8_t pat, uint8_t row, uint8_t chan) {
-    return (uint16_t)pat * PATTERN_SIZE + (uint16_t)row * 36U + (uint16_t)chan * 4U;
+    // addr = (pat * 1440) + (row * 45) + (chan * 5)
+    // 1440 is 0x05A0
+    uint16_t p_off = (uint16_t)pat * 1440U;
+    // 45 is 0x2D
+    uint16_t r_off = (uint16_t)row * 45U;
+    
+    return p_off + r_off + (chan * 5U);
 }
+
 static uint8_t pattern_clipboard[PATTERN_SIZE];
 static bool clipboard_full = false;
 
@@ -291,33 +298,28 @@ void sequencer_step(void) {
 }
 
 void handle_transport_controls() {
-    // F5: Play / Pause
+    // F6: Play / Pause
     if (key_pressed(KEY_F6)) {
-        seq.is_playing = !seq.is_playing;
-        
-        if (seq.is_playing) {
-            // 1. Force the sequencer to fire a row update on the next frame
-            seq.tick_counter = seq.ticks_per_row; 
-            
-            // 2. Sync the Pattern ID to the current Sequence Slot
-            // This ensures if you were looking at Pattern 0, but the sequence 
-            // says that slot is Pattern 2, it jumps to Pattern 2.
-            cur_pattern = read_order_xram(cur_order_idx);
-            
-            // 3. Kill any ringing keyboard note so it doesn't get stuck
-            if (active_midi_note != 0) {
-                OPL_NoteOff(cur_channel);
-                active_midi_note = 0;
-            }
-            
-            // 4. Refresh UI to show the correct pattern/highlight
-            render_grid();
-            update_cursor_visuals(cur_row, cur_row, cur_channel, cur_channel);
-        }
-        update_dashboard();
-    }
+    seq.is_playing = !seq.is_playing;
+    
+    if (seq.is_playing) {
+        seq.tick_counter = seq.ticks_per_row; 
 
-    // F6: Stop & Reset
+        // --- THE FIX ---
+        if (is_song_mode) {
+            // Sync to the song structure only if we are in SONG mode
+            cur_pattern = read_order_xram(cur_order_idx);
+            render_grid(); 
+        } 
+        // If is_song_mode is false, we don't touch cur_pattern.
+        // It stays on the pattern you were manually editing.
+        
+        // ... Panic/Mute logic ...
+    }
+    update_dashboard();
+}
+
+    // F7: Stop & Reset
     if (key_pressed(KEY_F7)) {
         seq.is_playing = false;
         
@@ -515,16 +517,20 @@ void handle_song_order_input() {
             if (cur_order_idx > 0) cur_order_idx--;
             else cur_order_idx = song_length - 1; // Wrap
             
-            cur_pattern = read_order_xram(cur_order_idx);
-            render_grid();
+            if (is_song_mode) {
+                cur_pattern = read_order_xram(cur_order_idx);
+                render_grid();
+            }
             update_dashboard();
         }
         if (key_pressed(KEY_F12)) {
             if (cur_order_idx < song_length - 1) cur_order_idx++;
             else cur_order_idx = 0; // Wrap
             
-            cur_pattern = read_order_xram(cur_order_idx);
-            render_grid();
+            if (is_song_mode) {
+                cur_pattern = read_order_xram(cur_order_idx);
+                render_grid();
+            }
             update_dashboard();
         }
     }

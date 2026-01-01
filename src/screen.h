@@ -16,7 +16,7 @@ typedef struct {
     uint8_t note;       // MIDI Note (0=None, 255=Off)
     uint8_t inst;       // Instrument index
     uint8_t vol;        // Volume (0-63)
-    uint8_t effect;     // Combined Effect/Param (for now)
+    uint16_t effect;    // 16-bit Command + Params
 } PatternCell;
 
 extern bool edit_mode;

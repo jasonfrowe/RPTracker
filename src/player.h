@@ -4,8 +4,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-// Buffer to hold one full pattern (32 rows * 9 channels * 4 bytes)
-#define PATTERN_SIZE 1152U 
+// Buffer to hold one full pattern (32 rows * 9 channels * 5 bytes)
+#define PATTERN_SIZE 1440U 
 
 #define is_shift_down() (key(KEY_LEFTSHIFT) || key(KEY_RIGHTSHIFT))
 #define is_ctrl_down()  (key(KEY_LEFTCTRL)  || key(KEY_RIGHTCTRL))
