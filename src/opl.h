@@ -23,6 +23,7 @@ extern uint16_t ticks_until_next_event;
 
 extern void OPL_NoteOn(uint8_t channel, uint8_t midi_note);
 extern void OPL_NoteOff(uint8_t channel);
+extern void OPL_SetPitch(uint8_t channel, uint8_t midi_note); // Change pitch without retriggering
 extern void OPL_Clear();
 extern void OPL_Write(uint8_t reg, uint8_t value);
 extern void OPL_SetVolume(uint8_t chan, uint8_t velocity);

@@ -109,6 +109,24 @@ void OPL_NoteOn(uint8_t channel, uint8_t midi_note) {
     shadow_b0[channel] = (freq >> 8) & 0x1F;
 }
 
+void OPL_SetPitch(uint8_t channel, uint8_t midi_note) {
+    if (channel > 8) return;
+
+    // Change pitch without retriggering the note
+    // Keeps the key-on bit from shadow_b0
+    if (channel_is_drum[channel]) {
+        midi_note = 60;
+    }
+    
+    uint16_t freq = midi_to_opl_freq(midi_note);
+    uint8_t block_fnum_high = (freq >> 8) & 0x1F;
+    
+    OPL_Write(0xA0 + channel, freq & 0xFF);
+    // Preserve key-on bit (bit 5) from shadow
+    OPL_Write(0xB0 + channel, block_fnum_high | (shadow_b0[channel] & 0x20));
+    shadow_b0[channel] = (shadow_b0[channel] & 0x20) | block_fnum_high;
+}
+
 void OPL_NoteOff(uint8_t channel) {
     if (channel > 8) return;
 
@@ -206,22 +224,22 @@ void OPL_Config(uint8_t enable, uint16_t addr) {
     
 }
 
-void OPL_SetPitch(uint8_t channel, uint8_t midi_note) {
-    if (channel > 8) return;
+// void OPL_SetPitch(uint8_t channel, uint8_t midi_note) {
+//     if (channel > 8) return;
 
-    // Use your existing helper to calculate Block and F-Number
-    // High Byte: 0x20 (KeyOn) | Block << 2 | F-Number High (2 bits)
-    // Low Byte: F-Number Low (8 bits)
-    uint16_t freq = midi_to_opl_freq(midi_note);
+//     // Use your existing helper to calculate Block and F-Number
+//     // High Byte: 0x20 (KeyOn) | Block << 2 | F-Number High (2 bits)
+//     // Low Byte: F-Number Low (8 bits)
+//     uint16_t freq = midi_to_opl_freq(midi_note);
 
-    // Write F-Number Low to $A0-$A8
-    OPL_Write(0xA0 + channel, freq & 0xFF);
+//     // Write F-Number Low to $A0-$A8
+//     OPL_Write(0xA0 + channel, freq & 0xFF);
 
-    // Write Block/F-Num High to $B0-$B8
-    // We force bit 5 (0x20) to 1 to ensure the note continues to sustain
-    uint8_t b_val = ((freq >> 8) & 0xFF) | 0x20;
-    OPL_Write(0xB0 + channel, b_val);
+//     // Write Block/F-Num High to $B0-$B8
+//     // We force bit 5 (0x20) to 1 to ensure the note continues to sustain
+//     uint8_t b_val = ((freq >> 8) & 0xFF) | 0x20;
+//     OPL_Write(0xB0 + channel, b_val);
     
-    // Update the logic shadow so NoteOff knows the last frequency used
-    shadow_b0[channel] = b_val & 0x1F; 
-}
+//     // Update the logic shadow so NoteOff knows the last frequency used
+//     shadow_b0[channel] = b_val & 0x1F; 
+// }

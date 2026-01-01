@@ -292,10 +292,7 @@ void process_vibrato_logic(uint8_t ch) {
     if (new_note < 0) new_note = 0;
     if (new_note > 127) new_note = 127;
 
-    // Retrigger note with vibrato offset
-    OPL_NoteOff(ch);
-    OPL_SetPatch(ch, &gm_bank[ch_vibrato[ch].inst]);
-    OPL_SetVolume(ch, ch_vibrato[ch].vol << 1);
-    OPL_NoteOn(ch, (uint8_t)new_note);
-    ch_peaks[ch] = ch_vibrato[ch].vol;
+    // Change pitch without retriggering note
+    OPL_SetPitch(ch, (uint8_t)new_note);
+    // Volume stays the same, no need to update
 }

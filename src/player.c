@@ -98,6 +98,7 @@ void player_tick(void) {
                 target_note = (current_octave + 1) * 12 + semitone;
                 note_pressed_this_frame = true;
                 ch_arp[channel].active = false; // Keyboard input kills any background Arp
+                ch_vibrato[channel].active = false; // Keyboard input kills vibrato
                 break; 
             }
         }
@@ -140,8 +141,9 @@ void player_tick(void) {
         }
     } 
     // 3. Logic: Note Off
+    // Only turn off notes via keyboard when sequencer is NOT playing
     else {
-        if (active_midi_note != 0) {
+        if (active_midi_note != 0 && !seq.is_playing) {
             OPL_NoteOff(channel);
             // ch_peaks[channel] = 0; // Clear peak
             active_midi_note = 0;
@@ -386,7 +388,19 @@ void sequencer_step(void) {
                     ch_arp[ch].active = false;
                     ch_porta[ch].active = false;
                     ch_volslide[ch].active = false;
+                    
+                    // If vibrato was active, reset pitch to base note before deactivating
+                    if (ch_vibrato[ch].active) {
+                        OPL_SetPitch(ch, ch_vibrato[ch].base_note);
+                    }
                     ch_vibrato[ch].active = false;
+                } else if (cmd == 0 && eff == 0x0000 && last_effect[ch] != 0x0000) {
+                    // Transitioning from an effect to no effect (empty row after effect)
+                    // Keep effects running but reset anything that was offset
+                    if (ch_vibrato[ch].active) {
+                        // Reset to base note pitch
+                        OPL_SetPitch(ch, ch_vibrato[ch].base_note);
+                    }
                 }
                 last_effect[ch] = cell.effect; // Update shadow
             }
