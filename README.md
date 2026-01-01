@@ -183,6 +183,49 @@ The effect continuously adjusts volume each tick until reaching the target.
 - Volume slide works independently with arpeggio and portamento effects.
 - The effect automatically stops when reaching the target volume.
 - Perfect for dynamic expression, drum envelopes, and atmospheric pads.
+
+---
+
+### 🎸 Effect Command 4: Vibrato (4RDT)
+Vibrato adds expressive pitch oscillation to sustained notes, creating warmth and character.
+The effect continuously modulates pitch using different waveforms at adjustable rates and depths.
+
+**Format: `4 R D T`**
+
+*   **4**: Command ID (Vibrato).
+*   **R (Rate)**: Oscillation speed - ticks per phase step (1-F):
+    *   `1`: Very fast vibrato (rapid warble)
+    *   `2-4`: Fast vibrato (noticeable oscillation)
+    *   `5-8`: Medium vibrato (musical default)
+    *   `9-C`: Slow vibrato (gentle wave)
+    *   `D-F`: Very slow vibrato (subtle modulation)
+    *   Lower values = faster oscillation
+    
+*   **D (Depth)**: Pitch deviation in semitones (1-F):
+    *   `1-2`: Subtle vibrato (smooth, realistic)
+    *   `3-5`: Medium vibrato (expressive, musical)
+    *   `6-9`: Wide vibrato (dramatic)
+    *   `A-F`: Very wide vibrato (extreme effect)
+
+*   **T (Waveform)**: The oscillation shape:
+    *   `0`: **SINE** - Smooth, natural vibrato (default)
+    *   `1`: **TRIANGLE** - Linear rise/fall (vintage synth)
+    *   `2`: **SQUARE** - Abrupt pitch jumps (trill effect)
+    *   Other values wrap to 0-2
+
+**Usage:**
+- `4420`: Classic vibrato - medium rate, 2 semitones, sine wave (leads/vocals).
+- `4230`: Fast subtle vibrato - quick rate, 3 semitones, sine (strings).
+- `4651`: Wide slow vibrato - slow rate, 5 semitones, triangle (pads).
+- `4322`: Medium vibrato with square wave for trill effect.
+- `4A10`: Ultra-slow, subtle sine vibrato for atmospheric textures.
+- `F000` or `0000`: Stop vibrato effect.
+
+**Notes:**
+- Vibrato and Arpeggio are mutually exclusive - activating one disables the other.
+- Vibrato works independently with portamento and volume slide.
+- Continuous effect - runs until explicitly stopped or note changes.
+- Perfect for leads, pads, strings, and adding life to sustained notes.
 - Combine with Note Off (`===`) for creative pitch drops.
 
 ---

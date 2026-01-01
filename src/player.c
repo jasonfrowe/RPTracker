@@ -357,10 +357,36 @@ void sequencer_step(void) {
                     } else if (ch_volslide[ch].mode == 1 && target_nibble == 0) {
                         ch_volslide[ch].target_vol = 0; // Slide down to silence
                     }
+                } else if (cmd == 4) {
+                    // Vibrato: 4RDT
+                    // R = Rate (ticks per phase step - lower = faster)
+                    // D = Depth (pitch deviation in semitones)
+                    // T = Waveform (0=sine, 1=triangle, 2=square)
+                    
+                    // Determine starting note and volume
+                    uint8_t start_note = (cell.note != 0 && cell.note != 255) ? cell.note : ch_arp[ch].base_note;
+                    uint8_t start_inst = (cell.note != 0 && cell.note != 255) ? cell.inst : ch_arp[ch].inst;
+                    uint8_t start_vol = (cell.note != 0 && cell.note != 255) ? cell.vol : ch_arp[ch].vol;
+                    
+                    ch_vibrato[ch].base_note = start_note;
+                    ch_vibrato[ch].inst = start_inst;
+                    ch_vibrato[ch].vol = start_vol;
+                    
+                    ch_vibrato[ch].active = true;
+                    ch_vibrato[ch].rate = (eff >> 8) & 0x0F;
+                    if (ch_vibrato[ch].rate == 0) ch_vibrato[ch].rate = 4; // Default rate
+                    ch_vibrato[ch].depth = (eff >> 4) & 0x0F;
+                    if (ch_vibrato[ch].depth == 0) ch_vibrato[ch].depth = 2; // Default depth
+                    ch_vibrato[ch].waveform = (eff & 0x0F) % 3; // 0-2 only
+                    ch_vibrato[ch].phase = 0;
+                    ch_vibrato[ch].tick_counter = 0;
+                    
+                    ch_arp[ch].active = false; // Vibrato kills arpeggio
                 } else if (eff == 0xF000 || (cell.note != 0 && cmd == 0)) {
                     ch_arp[ch].active = false;
                     ch_porta[ch].active = false;
                     ch_volslide[ch].active = false;
+                    ch_vibrato[ch].active = false;
                 }
                 last_effect[ch] = cell.effect; // Update shadow
             }
@@ -422,6 +448,7 @@ void sequencer_step(void) {
         process_arp_logic(ch);
         process_portamento_logic(ch);
         process_volume_slide_logic(ch);
+        process_vibrato_logic(ch);
     }
 }
 
@@ -462,6 +489,7 @@ void handle_transport_controls() {
             ch_arp[i].active = false;
             ch_porta[i].active = false;
             ch_volslide[i].active = false;
+            ch_vibrato[i].active = false;
         }
 
         // Reset to beginning

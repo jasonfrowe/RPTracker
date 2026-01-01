@@ -11,6 +11,7 @@
 ArpState ch_arp[9];
 PortamentoState ch_porta[9];
 VolumeSlideState ch_volslide[9];
+VibratoState ch_vibrato[9];
 
 const uint8_t arp_tick_lut[16] = {
     1, 2, 3, 6, 9, 12, 18, 24, 30, 36, 42, 48, 60, 72, 84, 96
@@ -230,4 +231,71 @@ void process_volume_slide_logic(uint8_t ch) {
     ch_volslide[ch].current_vol = current;
     OPL_SetVolume(ch, current << 1);
     ch_peaks[ch] = current;
+}
+
+void process_vibrato_logic(uint8_t ch) {
+    if (!ch_vibrato[ch].active) return;
+
+    ch_vibrato[ch].tick_counter++;
+
+    // Rate controls how many ticks per phase update
+    uint8_t rate = ch_vibrato[ch].rate;
+    if (rate == 0) rate = 1;
+    
+    if (ch_vibrato[ch].tick_counter < rate) return;
+
+    ch_vibrato[ch].tick_counter = 0;
+
+    // Update phase (0-255 represents full cycle)
+    ch_vibrato[ch].phase += 32; // Step through wave
+
+    // Calculate pitch offset based on waveform
+    int8_t offset = 0;
+    uint8_t phase = ch_vibrato[ch].phase;
+    uint8_t depth = ch_vibrato[ch].depth;
+    
+    if (depth == 0) depth = 1;
+
+    switch (ch_vibrato[ch].waveform) {
+        case 0: // Sine wave (approximation)
+            if (phase < 64) {
+                offset = (phase * depth) / 64;
+            } else if (phase < 128) {
+                offset = (((127 - phase) * depth) / 64);
+            } else if (phase < 192) {
+                offset = -((phase - 128) * depth) / 64;
+            } else {
+                offset = -(((255 - phase) * depth) / 64);
+            }
+            break;
+            
+        case 1: // Triangle wave
+            if (phase < 128) {
+                offset = (phase * depth) / 128;
+            } else {
+                offset = (((255 - phase) * depth) / 128);
+            }
+            offset -= depth / 2; // Center around 0
+            break;
+            
+        case 2: // Square wave
+            offset = (phase < 128) ? depth : -depth;
+            break;
+            
+        default: // Sine
+            offset = 0;
+            break;
+    }
+
+    // Apply pitch offset
+    int16_t new_note = (int16_t)ch_vibrato[ch].base_note + offset;
+    if (new_note < 0) new_note = 0;
+    if (new_note > 127) new_note = 127;
+
+    // Retrigger note with vibrato offset
+    OPL_NoteOff(ch);
+    OPL_SetPatch(ch, &gm_bank[ch_vibrato[ch].inst]);
+    OPL_SetVolume(ch, ch_vibrato[ch].vol << 1);
+    OPL_NoteOn(ch, (uint8_t)new_note);
+    ch_peaks[ch] = ch_vibrato[ch].vol;
 }
