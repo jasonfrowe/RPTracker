@@ -10,6 +10,7 @@
 // State memory for all 9 channels
 ArpState ch_arp[9];
 PortamentoState ch_porta[9];
+VolumeSlideState ch_volslide[9];
 
 const uint8_t arp_tick_lut[16] = {
     1, 2, 3, 6, 9, 12, 18, 24, 30, 36, 42, 48, 60, 72, 84, 96
@@ -161,4 +162,72 @@ void process_portamento_logic(uint8_t ch) {
     OPL_SetVolume(ch, ch_porta[ch].vol << 1);
     OPL_NoteOn(ch, current);
     ch_peaks[ch] = ch_porta[ch].vol;
+}
+
+void process_volume_slide_logic(uint8_t ch) {
+    if (!ch_volslide[ch].active) return;
+
+    ch_volslide[ch].tick_counter++;
+
+    // Process every tick (no speed delay for smooth volume changes)
+    if (ch_volslide[ch].tick_counter < 1) return;
+
+    ch_volslide[ch].tick_counter = 0;
+
+    uint8_t current = ch_volslide[ch].current_vol;
+    uint8_t target = ch_volslide[ch].target_vol;
+    uint8_t speed = ch_volslide[ch].speed;
+    if (speed == 0) speed = 1;
+    bool reached_target = false;
+
+    // Calculate next volume based on mode
+    if (ch_volslide[ch].mode == 0) { // Up
+        if (current + speed < 63) {
+            current += speed;
+            if (target > 0 && current >= target) {
+                current = target;
+                reached_target = true;
+            }
+        } else {
+            current = 63;
+            reached_target = true;
+        }
+    } else if (ch_volslide[ch].mode == 1) { // Down
+        if (current > speed) {
+            current -= speed;
+            if (target > 0 && current <= target) {
+                current = target;
+                reached_target = true;
+            }
+        } else {
+            current = 0;
+            reached_target = true;
+        }
+    } else if (ch_volslide[ch].mode == 2) { // To Target
+        if (current < target) {
+            current += speed;
+            if (current >= target) {
+                current = target;
+                reached_target = true;
+            }
+        } else if (current > target) {
+            current -= speed;
+            if (current <= target) {
+                current = target;
+                reached_target = true;
+            }
+        } else {
+            reached_target = true;
+        }
+    }
+
+    // Stop if reached target
+    if (reached_target) {
+        ch_volslide[ch].active = false;
+    }
+
+    // Update volume
+    ch_volslide[ch].current_vol = current;
+    OPL_SetVolume(ch, current << 1);
+    ch_peaks[ch] = current;
 }

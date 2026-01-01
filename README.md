@@ -147,6 +147,46 @@ The effect continuously steps through semitones until reaching the target note.
 
 ---
 
+### 🎚️ Effect Command 3: Volume Slide (3SDT)
+Volume Slide creates smooth dynamic changes - fade-ins, fade-outs, crescendos, and swells.
+The effect continuously adjusts volume each tick until reaching the target.
+
+**Format: `3 S D T`**
+
+*   **3**: Command ID (Volume Slide).
+*   **S (Mode)**: The slide direction:
+    *   `0`: **UP** - Increases volume toward maximum or target
+    *   `1`: **DOWN** - Decreases volume toward silence or target
+    *   `2`: **TO TARGET** - Slides to the specific volume in T
+    
+*   **D (Speed)**: Volume units to change per tick (1-F):
+    *   `1`: Very slow fade (1 unit per tick)
+    *   `2-4`: Slow fade (smooth, musical)
+    *   `5-8`: Medium fade (noticeable change)
+    *   `9-C`: Fast fade (dramatic effect)
+    *   `D-F`: Very fast fade (instant change)
+
+*   **T (Target)**: The target volume or limit (0-F, scaled to 0-63):
+    *   **Mode 0**: Target volume for fade-in (0 = fade to max volume 63)
+    *   **Mode 1**: Target volume for fade-out (0 = fade to silence)
+    *   **Mode 2**: Exact target volume (0=silent, F=max)
+
+**Usage:**
+- `3020`: Fade up to max volume, 2 units per tick (smooth crescendo).
+- `3130`: Fade down to silence, 3 units per tick (smooth fade-out).
+- `3048`: Fade up to medium volume (8/15 = ~34/63), 4 units per tick.
+- `3218`: Fade to medium-low volume (8/15), 1 unit per tick (slow swell).
+- `310F`: Fast fade to max, 1 unit per tick.
+- `F000` or `0000`: Stop volume slide effect.
+
+**Notes:**
+- Volume slide works independently with arpeggio and portamento effects.
+- The effect automatically stops when reaching the target volume.
+- Perfect for dynamic expression, drum envelopes, and atmospheric pads.
+- Combine with Note Off (`===`) for creative pitch drops.
+
+---
+
 ## 🖥 User Interface Guide
 
 ### The Dashboard (Top)

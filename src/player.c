@@ -193,6 +193,7 @@ void player_tick(void) {
         effect_view_mode = !effect_view_mode;
         draw_headers(); // Update RN | NOTE EFFT label
         render_grid();  // Swap columns on screen
+        update_cursor_visuals(cur_row, cur_row, cur_channel, cur_channel);
     }
 
     handle_song_order_input();
@@ -325,9 +326,41 @@ void sequencer_step(void) {
                         }
                     }
                     ch_arp[ch].active = false; // Portamento kills arpeggio
+                } else if (cmd == 3) {
+                    // Volume Slide: 3SDT
+                    // S = Mode (0=Up, 1=Down, 2=To Target)
+                    // D = Speed (volume units per tick)
+                    // T = Target volume (0-F represents 0-63 scaled)
+                    
+                    // Determine starting volume: use vol on this row if present, else use current vol
+                    uint8_t start_vol = (cell.note != 0 && cell.note != 255) ? cell.vol : ch_arp[ch].vol;
+                    uint8_t start_note = (cell.note != 0 && cell.note != 255) ? cell.note : ch_arp[ch].base_note;
+                    uint8_t start_inst = (cell.note != 0 && cell.note != 255) ? cell.inst : ch_arp[ch].inst;
+                    
+                    ch_volslide[ch].current_vol = start_vol;
+                    ch_volslide[ch].base_note = start_note;
+                    ch_volslide[ch].inst = start_inst;
+                    
+                    ch_volslide[ch].active = true;
+                    ch_volslide[ch].mode = (eff >> 8) & 0x0F;
+                    ch_volslide[ch].speed = ((eff >> 4) & 0x0F);
+                    if (ch_volslide[ch].speed == 0) ch_volslide[ch].speed = 1;
+                    
+                    // Target volume: scale from 0-F to 0-63
+                    uint8_t target_nibble = (eff & 0x0F);
+                    ch_volslide[ch].target_vol = (target_nibble * 63) / 15;
+                    ch_volslide[ch].tick_counter = 0;
+                    
+                    // For modes 0 and 1, if target is 0, slide to limit
+                    if (ch_volslide[ch].mode == 0 && target_nibble == 0) {
+                        ch_volslide[ch].target_vol = 63; // Slide up to max
+                    } else if (ch_volslide[ch].mode == 1 && target_nibble == 0) {
+                        ch_volslide[ch].target_vol = 0; // Slide down to silence
+                    }
                 } else if (eff == 0xF000 || (cell.note != 0 && cmd == 0)) {
                     ch_arp[ch].active = false;
                     ch_porta[ch].active = false;
+                    ch_volslide[ch].active = false;
                 }
                 last_effect[ch] = cell.effect; // Update shadow
             }
@@ -388,6 +421,7 @@ void sequencer_step(void) {
     for (uint8_t ch = 0; ch < 9; ch++) {
         process_arp_logic(ch);
         process_portamento_logic(ch);
+        process_volume_slide_logic(ch);
     }
 }
 
@@ -427,6 +461,7 @@ void handle_transport_controls() {
             last_effect[i] = 0xFFFF;
             ch_arp[i].active = false;
             ch_porta[i].active = false;
+            ch_volslide[i].active = false;
         }
 
         // Reset to beginning
@@ -492,6 +527,7 @@ void modify_volume_effects(int8_t delta) {
 
         write_cell(cur_pattern, cur_row, cur_channel, &cell);
         render_row(cur_row);
+        update_cursor_visuals(cur_row, cur_row, cur_channel, cur_channel);
     } 
     else {
         // --- VOLUME EDITING ---
@@ -506,6 +542,7 @@ void modify_volume_effects(int8_t delta) {
             
             write_cell(cur_pattern, cur_row, cur_channel, &cell);
             render_row(cur_row);
+            update_cursor_visuals(cur_row, cur_row, cur_channel, cur_channel);
             
             // Live Preview
             OPL_SetVolume(cur_channel, cell.vol << 1);
@@ -535,6 +572,7 @@ void modify_effect_low_byte(int8_t delta) {
 
     write_cell(cur_pattern, cur_row, cur_channel, &cell);
     render_row(cur_row);
+    update_cursor_visuals(cur_row, cur_row, cur_channel, cur_channel);
 }
 
 void modify_instrument(int8_t delta) {

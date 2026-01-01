@@ -232,7 +232,10 @@ void update_cursor_visuals(uint8_t old_row, uint8_t new_row, uint8_t old_ch, uin
         RIA.rw0 = bar_color;
     }
 
-    // --- 4. PAINT ACTIVE CELL (Yellow text on Mode-Specific Red/Blue) ---
+    // --- 4. PAINT ACTIVE CELL ---
+    // Text color depends on effect_view_mode: yellow for effects, cyan for normal
+    uint8_t text_color = effect_view_mode ? HUD_COL_YELLOW : HUD_COL_CYAN;
+    
     uint8_t cell_x = 4 + (new_ch * 8);
     uint16_t cell_addr = text_message_addr + (new_y * 80 + cell_x) * 3;
     
@@ -240,7 +243,7 @@ void update_cursor_visuals(uint8_t old_row, uint8_t new_row, uint8_t old_ch, uin
     RIA.step0 = 1; 
     for (uint8_t i = 0; i < 7; i++) {
         RIA.addr0++;         // Skip Character
-        RIA.rw0 = HUD_COL_YELLOW; 
+        RIA.rw0 = text_color; 
         RIA.rw0 = cell_color; // Apply Red or Blue BG
     }
 
