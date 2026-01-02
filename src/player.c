@@ -585,8 +585,6 @@ void handle_transport_controls() {
             } 
             // If is_song_mode is false, we don't touch cur_pattern.
             // It stays on the pattern you were manually editing.
-            
-            // ... Panic/Mute logic ...
         }
         update_dashboard();
     }
@@ -816,54 +814,79 @@ void change_pattern(int8_t delta) {
 }
 
 void handle_song_order_input() {
+    bool state_changed = false;
+
     // 1. Shift + F11/F12: Change Pattern ID in CURRENT Order Slot
     if (is_shift_down()) {
         uint8_t p = read_order_xram(cur_order_idx);
         if (key_pressed(KEY_F11)) {
-            if (p > 0) write_order_xram(cur_order_idx, p - 1);
-            else write_order_xram(cur_order_idx, MAX_PATTERNS - 1); // Wrap
-            update_dashboard();
+            p = (p > 0) ? p - 1 : MAX_PATTERNS - 1;
+            state_changed = true;
+        } else if (key_pressed(KEY_F12)) {
+            p = (p < MAX_PATTERNS - 1) ? p + 1 : 0;
+            state_changed = true;
         }
-        if (key_pressed(KEY_F12)) {
-            if (p < MAX_PATTERNS - 1) write_order_xram(cur_order_idx, p + 1);
-            else write_order_xram(cur_order_idx, 0); // Wrap
-            update_dashboard();
+
+        if (state_changed) {
+            write_order_xram(cur_order_idx, p);
+            // SYNC: Immediately update the current editing pattern to match
+            cur_pattern = p; 
+            render_grid();
         }
     }
+    
     // 2. Alt + F11/F12: Change total SONG LENGTH
     else if (is_alt_down()) {
         if (key_pressed(KEY_F11)) {
-            if (song_length > 1) song_length--;
-            update_dashboard();
+            if (song_length > 1) {
+                song_length--;
+                // SAFETY: If we shortened the song and moved the end-line 
+                // past our current cursor, snap the cursor back into bounds.
+                if (cur_order_idx >= song_length) {
+                    cur_order_idx = (uint8_t)(song_length - 1);
+                }
+                state_changed = true;
+            }
         }
-        if (key_pressed(KEY_F12)) {
-            if (song_length < MAX_ORDERS_USER) song_length++; // Warning fixed by uint16_t
-            update_dashboard();
+        else if (key_pressed(KEY_F12)) {
+            if (song_length < MAX_ORDERS_USER) {
+                song_length++;
+                state_changed = true;
+            }
         }
-
+        
+        if (state_changed) {
+            // SYNC: Ensure pattern matches the (potentially snapped) index
+            cur_pattern = read_order_xram(cur_order_idx);
+            render_grid();
+        }
     }
+    
     // 3. Just F11/F12: Navigate the Order List (Jump through the song)
     else {
         if (key_pressed(KEY_F11)) {
             if (cur_order_idx > 0) cur_order_idx--;
-            else cur_order_idx = song_length - 1; // Wrap
-            
-            if (is_song_mode) {
-                cur_pattern = read_order_xram(cur_order_idx);
-                render_grid();
-            }
-            update_dashboard();
+            else cur_order_idx = (uint8_t)(song_length - 1);
+            state_changed = true;
         }
-        if (key_pressed(KEY_F12)) {
-            if (cur_order_idx < song_length - 1) cur_order_idx++;
-            else cur_order_idx = 0; // Wrap
-            
-            if (is_song_mode) {
-                cur_pattern = read_order_xram(cur_order_idx);
-                render_grid();
-            }
-            update_dashboard();
+        else if (key_pressed(KEY_F12)) {
+            if (cur_order_idx < (uint8_t)(song_length - 1)) cur_order_idx++;
+            else cur_order_idx = 0;
+            state_changed = true;
         }
+
+        if (state_changed) {
+            // CONSISTENCY: Always update cur_pattern when navigating sequence.
+            // This removes the "confusing view" by ensuring the grid follows the sequence highlight.
+            cur_pattern = read_order_xram(cur_order_idx);
+            render_grid();
+        }
+    }
+
+    if (state_changed) {
+        update_dashboard();
+        // Force highlight update in case the pattern jumped
+        update_cursor_visuals(cur_row, cur_row, cur_channel, cur_channel);
     }
 }
 
