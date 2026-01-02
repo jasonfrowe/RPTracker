@@ -457,9 +457,13 @@ void sequencer_step(void) {
                     ch_tremolo[ch].tick_counter = 0;
                 } else if (cmd == 9) {
                     // Fine Pitch: 9__D
-                    // D = Detune in 1/16 semitones (signed: 0-7 = +, 8-F = -)
+                    // D = Detune nibble (0-7 = UP, 8-F = DOWN)
                     uint8_t detune_raw = (eff & 0x0F);
-                    int8_t detune = (detune_raw < 8) ? detune_raw : -(16 - detune_raw);
+                    
+                    // Convert nibble to signed integer:
+                    // 0..7 stays 0..7
+                    // 8..F becomes -8..-1
+                    int8_t detune = (detune_raw < 8) ? (int8_t)detune_raw : (int8_t)detune_raw - 16;
                     
                     uint8_t note = (cell.note != 0 && cell.note != 255) ? cell.note : ch_arp[ch].base_note;
                     
@@ -470,13 +474,13 @@ void sequencer_step(void) {
                     ch_finepitch[ch].vol = (cell.note != 0 && cell.note != 255) ? cell.vol : ch_arp[ch].vol;
                     
                     // Apply fine pitch immediately
-                    // Note: OPL2 doesn't support fine tuning easily, so we approximate
-                    // by adjusting the F-number slightly (not implemented in OPL_SetPitch currently)
-                    // For now, just set the note normally
                     OPL_NoteOff(ch);
                     OPL_SetPatch(ch, &gm_bank[ch_finepitch[ch].inst]);
-                    OPL_SetVolume(ch, ch_finepitch[ch].vol << 1);
-                    OPL_NoteOn(ch, ch_finepitch[ch].base_note);
+                    OPL_SetVolume(ch, ch_finepitch[ch].vol); // Helper handles << 1
+                    
+                    // USE THE NEW DETUNED FUNCTION
+                    OPL_NoteOn_Detuned(ch, ch_finepitch[ch].base_note, detune);
+                    
                     ch_peaks[ch] = ch_finepitch[ch].vol;
                 } else if (eff == 0xF000 || (cell.note != 0 && cmd == 0)) {
                     ch_arp[ch].active = false;
