@@ -59,8 +59,7 @@ These keys adjust the settings used when recording **new** notes.
 *   *Note: Hold SHIFT with ; or ' to jump by 0x10 for faster parameter scrolling.*
 
 ### 🎹 Effect Command 1: Advanced Arpeggio (1SDT)
-RPTracker uses a 16-bit effect system (4 hex digits) when in Effect View (`/`).
-The Arpeggio engine retriggers the note on every cycle step to ensure a crisp, chiptune attack.
+RPTracker uses a 16-bit effect system (4 hex digits) when in Effect View (`/`). The Arpeggio engine retriggers the note on every cycle step to ensure a crisp, high-speed attack.
 
 **Format: `1 S D T`**
 
@@ -70,42 +69,42 @@ The Arpeggio engine retriggers the note on every cycle step to ensure a crisp, c
     **Basic 2-Note Patterns:**
     *   `0`: **UP** - Root, +Depth (classic oscillation)
     *   `1`: **DOWN** - +Depth, Root (inverted oscillation)
-    *   `D`: **OCTAVE** - Root, +12 (octave jumps)
-    *   `E`: **FIFTH** - Root, +7 (power chord pattern)
     
     **Major/Minor Triads (4-Note with Octave):**
     *   `2`: **MAJOR** - Root, +4, +7, +12 - *Ignores D*
     *   `3`: **MINOR** - Root, +3, +7, +12 - *Ignores D*
     *   `6`: **SUS4** - Root, +5, +7, +12 - *Ignores D*
     *   `7`: **SUS2** - Root, +2, +7, +12 - *Ignores D*
-    *   `9`: **AUG** - Root, +4, +8, +12 (augmented) - *Ignores D*
+    *   `9`: **AUG**  - Root, +4, +8, +12 - *Ignores D*
     
-    **7th Chords (4-Note):**
-    *   `4`: **MAJ7** - Root, +4, +7, +11 (jazzy) - *Ignores D*
-    *   `5`: **MIN7** - Root, +3, +7, +10 (bluesy) - *Ignores D*
-    *   `8`: **DIM** - Root, +3, +6, +9 (diminished tension) - *Ignores D*
-    
+    **7th & Specialized Chords (4-Note):**
+    *   `4`: **MAJ7**  - Root, +4, +7, +11 - *Ignores D*
+    *   `5`: **MIN7**  - Root, +3, +7, +10 - *Ignores D*
+    *   `8`: **DIM**   - Root, +3, +6, +9  - *Ignores D*
+    *   `A`: **POWER** - Root, +7, +12, +12 - *Ignores D*
+
+    **Guitar Strums (6-Note Open-Voiced Cycles):**
+    *   `C`: **GTR MAJOR** - Emulates open G-Major (0, 4, 7, 12, 16, 19)
+    *   `D`: **GTR MINOR** - Emulates open G-Minor (0, 3, 7, 12, 15, 19)
+    *   `E`: **GTR MAJ9**  - Lush open Major 9th (0, 0, 4, 7, 11, 14)
+
     **Special Effects:**
-    *   `A`: **POWER** - Root, +7, +12, +12 (rock power chord) - *Ignores D*
     *   `B`: **UPDOWN** - Root, +Depth, +Depth, Root (bounce pattern)
-    *   `C`: **UP3** - Root, +Depth, +Depth×2, +Depth×3 (climbing)
     *   `F`: **DOUBLE** - Root, Root, +Depth, +Depth (stutter effect)
 
-*   **D (Depth)**: The interval in semitones (0-F). Used by styles 0, 1, B, C, F. Ignored by chord patterns.
-*   **T (Timing)**: How fast the notes cycle (mapped to a Musical LUT):
+*   **D (Depth)**: The interval in semitones (0-F). Used by styles 0, 1, B, F. Ignored by preset chord patterns.
+*   **T (Timing)**: The cycle speed (mapped to a Musical LUT):
     *   `0-2`: High-speed "Buzz" (1-3 VSync frames)
-    *   `3`: **1 Row** (6 ticks) - Perfect for 4-note chords in 32-row patterns
-    *   `4-6`: Mid-tempo (9-18 ticks)
-    *   `7`: **2 Rows** (24 ticks)
-    *   `B`: **4 Rows** (48 ticks)
-    *   `F`: **16 Rows** (96 ticks)
+    *   `3`: **1 Row** (6 ticks) - Standard rhythmic speed
+    *   `7`: **2 Rows** (12 ticks)
+    *   `B`: **4 Rows** (24 ticks - 1 Beat)
+    *   `F`: **16 Rows** (96 ticks - 1 Bar)
 
-**Usage:**
-- `12C3`: Major chord arpeggio, 1 row per note (4 rows/cycle, 8 cycles per pattern).
-- `13C3`: Minor chord arpeggio, 1 row per note.
-- `10C3`: Simple octave oscillation (Up, 12 semitones, every 1 row).
-- `14C3`: Jazzy Maj7 arpeggio.
-- `1AC1`: Fast power chord buzz effect.
+**Usage Examples:**
+- `1203`: Standard Major chord arpeggio, 1 row per note.
+- `1C01`: Fast Guitar Major strum (creates a "shimmering" chord effect).
+- `1E02`: Open-voiced Major 9th "jazz" strum at medium-high speed.
+- `10C3`: Simple octave oscillation (Up 12 semitones, every 1 row).
 - `F000` or `0000`: Stop all effects on the channel.
 
 ---

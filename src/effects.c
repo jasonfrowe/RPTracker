@@ -77,12 +77,40 @@ int16_t get_arp_offset(uint8_t style, uint8_t depth, uint8_t index) {
             if (index % 4 == 2) return depth;
             if (index % 4 == 3) return 0;
             return 0;
-        case 12: // UP3 (0, depth, depth*2, depth*3) - climbing thirds
-            return (index % 4) * depth;
-        case 13: // OCTAVE (root, octave, root, octave)
-            return (index % 2 == 1) ? 12 : 0;
-        case 14: // FIFTH (root, 5th, root, 5th)
-            return (index % 2 == 1) ? 7 : 0;
+        case 12: // GUITAR MAJOR STRUM (6-note cycle)
+            // Emulates an open-voiced G Major: G2, B2, D3, G3, B3, G4
+            {
+                uint8_t s = index % 6;
+                if (s == 1) return 4;  // Major 3rd
+                if (s == 2) return 7;  // 5th
+                if (s == 3) return 12; // Octave
+                if (s == 4) return 16; // Octave + 3rd
+                if (s == 5) return 19; // Octave + 5th (or 24 for high Root)
+                return 0;
+            }
+
+        case 13: // GUITAR MINOR STRUM (6-note cycle)
+            // Emulates an open-voiced G Minor: G2, Bb2, D3, G3, Bb3, G4
+            {
+                uint8_t s = index % 6;
+                if (s == 1) return 3;  // Minor 3rd
+                if (s == 2) return 7;  // 5th
+                if (s == 3) return 12; // Octave
+                if (s == 4) return 15; // Octave + Minor 3rd
+                if (s == 5) return 19; // Octave + 5th
+                return 0;
+            }
+        case 14: // GUITAR Major 9th (6-note cycle)
+            // Emulates an open-voiced Major 9th: Root, Root, 3rd, 5th, 7th, 9th
+            {
+                uint8_t s = index % 6;
+                if (s == 1) return 0;  // Minor 3rd
+                if (s == 2) return 4;  // 5th
+                if (s == 3) return 7; // Octave
+                if (s == 4) return 11; // Octave + Minor 3rd
+                if (s == 5) return 14; // Octave + 5th
+                return 0;
+            }
         case 15: // DOUBLE (depth value unused, repeats each note)
             return (index % 4 < 2) ? 0 : depth;
     }
