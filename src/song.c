@@ -107,36 +107,37 @@ void load_song(const char* filename) {
 
     char head[4];
     if (read(fd, head, 4) != 4 || head[0] != 'R') {
-        printf("Error: Invalid file\n");
+        printf("Error: Invalid file format\n");
         close(fd);
         return;
     }
 
-    // Read Metadata back into 6502 RAM
+    // 1. Read Metadata into 6502 RAM
     read(fd, &current_octave, 1);
     read(fd, &current_volume, 1);
     read(fd, &song_length, 2);
 
-    // Load bulk data directly back into XRAM
-    // read_xram handles the busy-wait internally
-    read_xram(0x0000, 0xB400, fd);
-    read_xram(0xB400, 0x0100, fd);
+    // 2. Load bulk data directly into XRAM
+    read_xram(0x0000, 0xB400, fd); // Patterns
+    read_xram(0xB400, 0x0100, fd); // Sequence List
 
-    // Update the active filename global
+    close(fd); // Close file immediately after reading
+
+    // 3. UPDATE LOGICAL STATE BEFORE UI REFRESH
+    // This ensures that when the screen draws, it's already looking 
+    // at the first pattern of the NEW song.
+    cur_order_idx = 0;
+    cur_pattern = read_order_xram(0); 
+    cur_row = 0;
+
+    // 4. SYNC GLOBALS
     strncpy(active_filename, filename, 12);
     active_filename[12] = '\0';
 
-    // Refresh everything
+    // 5. SINGLE UI REFRESH (Clears dialog and draws new data in one burst)
     refresh_all_ui(); 
-
-    close(fd);
-
-    // Sync UI
-    cur_order_idx = 0;
-    cur_pattern = read_order_xram(0);
-    cur_row = 0;
-    refresh_all_ui();
-    printf("Loaded: %s\n", filename);
+    
+    printf("Loaded: %s\n", active_filename);
 }
 
 void handle_filename_input() {
