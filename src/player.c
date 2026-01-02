@@ -495,11 +495,16 @@ void sequencer_step(void) {
 
             // --- 2. TRIGGER NOTE WITH OFFSET ---
             if (cell.note != 0) {
-                // DEBUG: Print note trigger info
-                if (ch == 0 && cur_row == 7) {
-                    RIA.addr0 = 0xFFFF;
-                    xreg_ria_keyboard(0, 0, 0, 1, "Row 7 trigger");
+                // Deactivate effects when new note + no effect command (cmd=0)
+                // This handles the case where effect column is 0000 but last_effect was also 0000
+                // (so effect parsing block was skipped)
+                uint8_t cmd = (cell.effect >> 12) & 0x0F;
+                if (cmd == 0 && cell.note != 255) {
+                    ch_tremolo[ch].active = false;
+                    ch_retrigger[ch].active = false;
+                    ch_vibrato[ch].active = false;
                 }
+                
                 OPL_NoteOff(ch); 
                 if (cell.note != 255) {
                     ch_arp[ch].base_note = cell.note;
