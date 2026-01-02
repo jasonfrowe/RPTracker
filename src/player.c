@@ -13,6 +13,9 @@
 bool effect_view_mode = false;
 uint16_t last_effect[9] = {0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF};
 
+// Playback Options
+bool is_follow_mode = true;
+uint8_t play_row = 0; // The actual row being played by the engine
 
 // Current State
 uint8_t current_instrument = 0; // Instrument index (0 = Piano)
@@ -196,6 +199,7 @@ void player_tick(void) {
         draw_headers(); // Update RN | NOTE EFFT label
         render_grid();  // Swap columns on screen
         update_cursor_visuals(cur_row, cur_row, cur_channel, cur_channel);
+        mark_playhead(play_row);
     }
 
     handle_song_order_input();
@@ -259,6 +263,7 @@ void handle_navigation() {
         edit_mode = !edit_mode;
         // Force a visual refresh even if row/column didn't move
         update_cursor_visuals(cur_row, cur_row, cur_channel, cur_channel);
+        mark_playhead(play_row);
         update_dashboard();
     }
 
@@ -270,12 +275,12 @@ void sequencer_step(void) {
 
     if (seq.tick_counter >= seq.ticks_per_row) {
         seq.tick_counter = 0;
-        
+
         for (uint8_t ch = 0; ch < 9; ch++) {
             if (ch == cur_channel && active_midi_note != 0) continue;
 
             PatternCell cell;
-            read_cell(cur_pattern, cur_row, ch, &cell);
+            read_cell(cur_pattern, play_row, ch, &cell);
             
             // --- 1. IDEMPOTENT EFFECT PARSING ---
             if (cell.effect != last_effect[ch]) {
@@ -537,22 +542,53 @@ void sequencer_step(void) {
         }
 
         // --- Advance Row / UI Pointers ---
-        uint8_t old_row = cur_row;
-        bool pattern_changed = false;
-        if (cur_row < 31) {
-            cur_row++;
+        // uint8_t old_row = cur_row;
+        // bool pattern_changed = false;
+        // if (cur_row < 31) {
+        //     cur_row++;
+        // } else {
+        //     cur_row = 0;
+        //     if (is_song_mode) {
+        //         cur_order_idx++;
+        //         if (cur_order_idx >= song_length) cur_order_idx = 0;
+        //         cur_pattern = read_order_xram(cur_order_idx);
+        //         render_grid(); 
+        //         pattern_changed = true;
+        //     }
+        // }
+        // update_cursor_visuals(old_row, cur_row, cur_channel, cur_channel);
+        // if (pattern_changed || cur_row == 0) update_dashboard();
+
+        // --- SYNC THE UI TO THE CURRENT SOUND ---
+        // We mark the playhead BEFORE we increment the variable.
+        mark_playhead(play_row);
+
+        if (is_follow_mode) {
+            uint8_t old_edit_row = cur_row;
+            cur_row = play_row;
+            if (cur_row != old_edit_row) {
+                update_cursor_visuals(old_edit_row, cur_row, cur_channel, cur_channel);
+                // Re-mark playhead after visuals update because update_cursor calls render_row
+                mark_playhead(play_row); 
+            }
+        }
+
+        // --- ADVANCE POINTERS FOR THE NEXT BEAT ---
+        if (play_row < 31) {
+            play_row++;
         } else {
-            cur_row = 0;
+            play_row = 0;
             if (is_song_mode) {
                 cur_order_idx++;
                 if (cur_order_idx >= song_length) cur_order_idx = 0;
                 cur_pattern = read_order_xram(cur_order_idx);
-                render_grid(); 
-                pattern_changed = true;
+                render_grid();
             }
         }
-        update_cursor_visuals(old_row, cur_row, cur_channel, cur_channel);
-        if (pattern_changed || cur_row == 0) update_dashboard();
+
+        if (play_row == 0) update_dashboard();
+
+
     }
 
     // --- PHASE B: PER-VSYNC TICK ---
@@ -570,56 +606,81 @@ void sequencer_step(void) {
 }
 
 void handle_transport_controls() {
-    // F6: Play / Pause
+    // Enter: Play / Pause / Stop
+
+    if (key_pressed(KEY_ENTER)) {
+
+        // Shift + Enter : Stop & Reset to Beginning
+        if (is_shift_down()) {
+
+            seq.is_playing = false;
+            
+            // Silence all channels
+            for (uint8_t i = 0; i < 9; i++) {
+                OPL_NoteOff(i);
+                // ch_peaks[i] = 0; // Clear peak
+            }
+            
+            for (int i=0; i<9; i++) {
+                last_effect[i] = 0xFFFF;
+                ch_arp[i].active = false;
+                ch_porta[i].active = false;
+                ch_volslide[i].active = false;
+                ch_vibrato[i].active = false;
+                ch_notecut[i].active = false;
+                ch_notedelay[i].active = false;
+                ch_retrigger[i].active = false;
+                ch_tremolo[i].active = false;
+                ch_finepitch[i].active = false;
+            }
+
+            // Reset to beginning
+            uint8_t old = cur_row;
+            cur_row = 0;
+            seq.tick_counter = 0;
+            play_row = 0;
+            cur_order_idx = 0;
+            
+            update_cursor_visuals(old, 0, cur_channel, cur_channel);
+            mark_playhead(play_row);
+            update_dashboard();
+            
+        }
+        // Enter : Play / Pause Toggle
+        else {
+
+            seq.is_playing = !seq.is_playing;
+            
+            if (seq.is_playing) {
+                seq.tick_counter = seq.ticks_per_row; 
+
+                // --- THE FIX ---
+                if (is_song_mode) {
+                    // Sync to the song structure only if we are in SONG mode
+                    cur_pattern = read_order_xram(cur_order_idx);
+                    render_grid(); 
+                } 
+                // If is_song_mode is false, we don't touch cur_pattern.
+                // It stays on the pattern you were manually editing.
+            }
+            update_dashboard();
+        }
+    }
+
+    // --- F6: TOGGLE FOLLOW MODE ---
     if (key_pressed(KEY_F6)) {
-        seq.is_playing = !seq.is_playing;
+        is_follow_mode = !is_follow_mode;
         
-        if (seq.is_playing) {
-            seq.tick_counter = seq.ticks_per_row; 
-
-            // --- THE FIX ---
-            if (is_song_mode) {
-                // Sync to the song structure only if we are in SONG mode
-                cur_pattern = read_order_xram(cur_order_idx);
-                render_grid(); 
-            } 
-            // If is_song_mode is false, we don't touch cur_pattern.
-            // It stays on the pattern you were manually editing.
+        // If turning follow ON while playing, snap cursor to playhead immediately
+        if (is_follow_mode && seq.is_playing) {
+            uint8_t old_r = cur_row;
+            cur_row = play_row;
+            update_cursor_visuals(old_r, cur_row, cur_channel, cur_channel);
+            mark_playhead(play_row);
         }
         update_dashboard();
     }
 
-    // F7: Stop & Reset
-    if (key_pressed(KEY_F7)) {
-        seq.is_playing = false;
-        
-        // Silence all channels
-        for (uint8_t i = 0; i < 9; i++) {
-            OPL_NoteOff(i);
-            // ch_peaks[i] = 0; // Clear peak
-        }
-        
-        for (int i=0; i<9; i++) {
-            last_effect[i] = 0xFFFF;
-            ch_arp[i].active = false;
-            ch_porta[i].active = false;
-            ch_volslide[i].active = false;
-            ch_vibrato[i].active = false;
-            ch_notecut[i].active = false;
-            ch_notedelay[i].active = false;
-            ch_retrigger[i].active = false;
-            ch_tremolo[i].active = false;
-            ch_finepitch[i].active = false;
-        }
-
-        // Reset to beginning
-        uint8_t old = cur_row;
-        cur_row = 0;
-        seq.tick_counter = 0;
-        
-        update_cursor_visuals(old, 0, cur_channel, cur_channel);
-        update_dashboard();
-    }
 }
 
 void handle_editing(void) {
@@ -644,6 +705,7 @@ void handle_editing(void) {
         //     update_cursor_visuals(old_row, cur_row, cur_channel, cur_channel);
         // }
         update_cursor_visuals(cur_row, cur_row, cur_channel, cur_channel);
+        mark_playhead(play_row);
         
         printf("Cell Cleared at Row %d\n", cur_row - 1);
     }
@@ -676,6 +738,7 @@ void modify_volume_effects(int8_t delta) {
         write_cell(cur_pattern, cur_row, cur_channel, &cell);
         render_row(cur_row);
         update_cursor_visuals(cur_row, cur_row, cur_channel, cur_channel);
+        mark_playhead(play_row);
     } 
     else {
         // --- VOLUME EDITING ---
@@ -690,7 +753,7 @@ void modify_volume_effects(int8_t delta) {
             
             write_cell(cur_pattern, cur_row, cur_channel, &cell);
             render_row(cur_row);
-            update_cursor_visuals(cur_row, cur_row, cur_channel, cur_channel);
+            mark_playhead(play_row);
             
             // Live Preview
             OPL_SetVolume(cur_channel, cell.vol << 1);
@@ -721,6 +784,7 @@ void modify_effect_low_byte(int8_t delta) {
     write_cell(cur_pattern, cur_row, cur_channel, &cell);
     render_row(cur_row);
     update_cursor_visuals(cur_row, cur_row, cur_channel, cur_channel);
+    mark_playhead(play_row);
 }
 
 void modify_instrument(int8_t delta) {
@@ -751,6 +815,7 @@ void modify_instrument(int8_t delta) {
         update_dashboard(); // Update the "INS" hex at the top
     }
     update_cursor_visuals(cur_row, cur_row, cur_channel, cur_channel);
+    mark_playhead(play_row);
 }
 
 void modify_note(int8_t delta) {
@@ -808,6 +873,7 @@ void change_pattern(int8_t delta) {
         
         // Ensure the cursor highlight is still drawn on the current row
         update_cursor_visuals(cur_row, cur_row, cur_channel, cur_channel);
+        mark_playhead(play_row);
         
         printf("Switched to Pattern: %02X\n", cur_pattern);
     }
@@ -887,6 +953,7 @@ void handle_song_order_input() {
         update_dashboard();
         // Force highlight update in case the pattern jumped
         update_cursor_visuals(cur_row, cur_row, cur_channel, cur_channel);
+        mark_playhead(play_row);
     }
 }
 
@@ -919,6 +986,7 @@ void pattern_paste(uint8_t pat_idx) {
     if (pat_idx == cur_pattern) {
         render_grid();
         update_cursor_visuals(cur_row, cur_row, cur_channel, cur_channel);
+        mark_playhead(play_row);
     }
     printf("Pattern %02X Pasted.\n", pat_idx);
 }

@@ -20,6 +20,8 @@ typedef struct {
 
 extern SequencerState seq;
 
+extern bool is_follow_mode;
+extern uint8_t play_row;
 
 // Initialize player state
 void player_init(void);

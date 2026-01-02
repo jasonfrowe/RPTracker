@@ -18,6 +18,7 @@ uint8_t cur_pattern = 0;
 uint8_t cur_row = 0;        // 0-31
 uint8_t cur_channel = 0;    // 0-8
 bool edit_mode = false;     // Are we recording?
+uint8_t last_p_row = 255; // < and > symbols 
 
 void write_cell(uint8_t pat, uint8_t row, uint8_t chan, PatternCell *cell) {
     // 1. Point to the start of the 5-byte cell in XRAM
@@ -395,6 +396,7 @@ void draw_ui_dashboard(void) {
     draw_string(2, 3, "MODE:[       ] SEQ:                                                REC: ", HUD_COL_CYAN, HUD_COL_BG);
     draw_string(2, 4, "EDIT PAT:                                                          SEQ: ", HUD_COL_CYAN, HUD_COL_BG);
     draw_string(2, 5, "                                                                   LEN: ", HUD_COL_CYAN, HUD_COL_BG);
+    draw_string(2, 6, "                                                                   FOL: ", HUD_COL_CYAN, HUD_COL_BG);
 
     // Instrument Name
     draw_string(2, 8, "INS:    (                  )  VOL:     OCT:   ", HUD_COL_CYAN, HUD_COL_BG);
@@ -437,7 +439,7 @@ void draw_ui_dashboard(void) {
     // Row 23: Tools & Effects
     draw_string(2, 23, "Pick Ins: F5      Transpose : - / =    Effect Par : ; / '   ", HUD_COL_CYAN, HUD_COL_BG);
     // Row 24: Transport & Files
-    draw_string(2, 24, "Play    : F6/F7   Copy/Paste: Ctrl+C/V Save/Load  : Ctrl+S/O", HUD_COL_CYAN, HUD_COL_BG);
+    draw_string(2, 24, "Play    : Enter   Copy/Paste: Ctrl+C/V Save/Load  : Ctrl+S/O", HUD_COL_CYAN, HUD_COL_BG);
     // Row 25: Mode & Safety
     draw_string(2, 25, "Record  : Space   Song Mode : F8       Panic      : Esc     ", HUD_COL_CYAN, HUD_COL_BG);
 
@@ -446,7 +448,7 @@ void draw_ui_dashboard(void) {
         // Col 1 Keys (starts at 12)
         set_text_color(12, r, 5, HUD_COL_WHITE, HUD_COL_BG); 
         // Col 2 Keys (starts at 32)
-        set_text_color(32, r, 7, HUD_COL_WHITE, HUD_COL_BG);
+        set_text_color(32, r, 8, HUD_COL_WHITE, HUD_COL_BG);
         // Col 3 Keys (starts at 53)
         set_text_color(53, r, 9, HUD_COL_WHITE, HUD_COL_BG);
     }
@@ -484,6 +486,9 @@ void update_dashboard(void) {
     // Total Song Length and Sequencer Status
     draw_hex_byte_coloured(text_message_addr + (5 * 80 + 74) * 3, (uint8_t)song_length, HUD_COL_WHITE, HUD_COL_BG);
     draw_string(74, 4, seq.is_playing ? "PLAY" : "STOP", seq.is_playing ? HUD_COL_GREEN : HUD_COL_RED, HUD_COL_BG);
+
+    // Follow Mode: ON (Green) or OFF (Red)
+    draw_string(74, 6, is_follow_mode ? "ON " : "OFF", is_follow_mode ? HUD_COL_GREEN : HUD_COL_RED, HUD_COL_BG);
 
     // --- Row 8-12: Operator 1 (Modulator) ---
     draw_hex_byte(text_message_addr + (13 * 80 + 15) * 3, p->m_ave);
@@ -542,6 +547,41 @@ void update_meters(void) {
 }
 
 
+void mark_playhead(uint8_t row_to_draw) {
+    static uint8_t last_drawn_row = 255;
+    
+    // 1. Clear previous markers if they moved
+    if (last_drawn_row != 255 && last_drawn_row != row_to_draw) {
+        uint8_t old_y = last_drawn_row + GRID_SCREEN_OFFSET;
+        
+        RIA.addr0 = text_message_addr + (old_y * 80 + 2) * 3;
+        RIA.step0 = 3; // Skip FG/BG
+        RIA.rw0 = ' '; 
+        
+        RIA.addr0 = text_message_addr + (old_y * 80 + 77) * 3;
+        RIA.step0 = 3;
+        RIA.rw0 = ' ';
+    }
+
+    // 2. Draw current markers
+    // We draw even if not playing so the user can see where it stopped.
+    uint8_t new_y = row_to_draw + GRID_SCREEN_OFFSET;
+
+    // Left Marker (Column 2)
+    RIA.addr0 = text_message_addr + (new_y * 80 + 2) * 3;
+    RIA.step0 = 1; // Write Char and FG
+    RIA.rw0 = '>';
+    RIA.rw0 = HUD_COL_YELLOW;
+
+    // Right Marker (Column 77)
+    RIA.addr0 = text_message_addr + (new_y * 80 + 77) * 3;
+    RIA.step0 = 1;
+    RIA.rw0 = '<';
+    RIA.rw0 = HUD_COL_YELLOW;
+
+    last_drawn_row = row_to_draw;
+}
+
 void refresh_all_ui(void) {
     clear_top_ui();      // Wipes rows 0-27 in XRAM
     draw_ui_dashboard(); // Redraws the boxes, headers, and labels
@@ -549,4 +589,7 @@ void refresh_all_ui(void) {
     draw_headers();      // Redraws the grid headers (CH0, CH1, etc.)
     render_grid();       // Redraws the 32-row pattern grid (Row 28-59)
     update_cursor_visuals(cur_row, cur_row, cur_channel, cur_channel); // Restores cursor highlight
+    mark_playhead(play_row); // Restores playhead marker
 }
+
+

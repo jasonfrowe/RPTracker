@@ -22,11 +22,14 @@ These keys adjust the settings used when recording **new** notes.
 *   **[ / ]**: Decrease / Increase global **Volume** (Range 00-3F).
 *   **F5**: **Instrument Pick.** Samples the Note, Instrument, and Volume from the grid into your current Brush.
 
-### 3. Navigation & Transport
-*   **Arrow Keys**: Navigate the 9-channel pattern grid.
-*   **F6**: **Play / Pause.** In Song Mode, starts from the current Sequence slot. In Pattern Mode, loops the current pattern.
-*   **F7 / ESC**: **Stop & Panic.** Stops playback, resets the cursor to Row 00, and silences all hardware voices immediately.
-*   **F8**: **Toggle Playback Mode.** Switch between **PATTERN** (loops current patterns) and **SONG** (follows the Sequence Order List).
+### 3. Transport & Navigation
+*   **Arrow Keys**: Navigate the pattern grid.
+*   **ENTER**: **Play / Pause.** Starts playback from the current cursor position.
+*   **SHIFT + ENTER**: **Stop & Reset.** Resets playback to the start of the pattern/song and silences all voices.
+*   **F6**: **Toggle Follow Mode.** 
+    *   *ON (Green):* Grid follows the playhead.
+    *   *OFF (Red):* Grid stays put while music plays in the background.
+*   **ESC**: **Emergency Panic.** Immediate silence on all channels.
 
 ### 4. Editing & Grid Commands
 *   **Spacebar**: Toggle **Edit Mode**.

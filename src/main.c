@@ -95,6 +95,7 @@ int main(void)
     init_patterns();    // Clear pattern data
     render_grid();       // Initial grid draw
     update_cursor_visuals(0, 0, 0 ,0); // Initial cursor at 0,0
+    mark_playhead(0);
 
     // 4. Software Initialization
     init_input_system(); 
@@ -160,10 +161,18 @@ int main(void)
 
             // Always animate the meters every frame
             update_meters();
+
+            // Playhead Visuals
+            // if (play_row != last_p_row || !seq.is_playing) {
+            //     mark_playhead(play_row);
+            //     last_p_row = play_row;
+            // }
             
             // --- UI REFRESH: Row or Channel Movement
-            if (cur_row != prev_row || cur_channel != prev_chan) {
+            if (cur_row != prev_row || cur_channel != prev_chan || edit_mode != prev_edit_mode) {
                 update_cursor_visuals(prev_row, cur_row, prev_chan, cur_channel);
+
+                // mark_playhead(play_row);
                 
                 // SYNC: Ensure the OPL2 hardware channel we just moved into 
                 // is loaded with our current "brush" instrument.
@@ -177,6 +186,7 @@ int main(void)
             if (edit_mode != prev_edit_mode) {
                 update_dashboard(); 
             }
+
         }
 
     }
