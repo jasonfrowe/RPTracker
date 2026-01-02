@@ -139,17 +139,31 @@ void render_row(uint8_t row_idx) {
         PatternCell *cell = &row_data[ch];
 
         // Note (3 chars)
-        if (cell->note == 0) {
+        if (cell->note == 0 && cell->effect == 0) {
+            // Empty cell: show all dots
             for(int i=0; i<3; i++) { RIA.rw0 = '.'; RIA.rw0 = HUD_COL_WHITE; RIA.rw0 = bg; }
             for(int i=0; i<2; i++) { RIA.rw0 = '.'; RIA.rw0 = HUD_COL_DPURPLE; RIA.rw0 = bg; }
             for(int i=0; i<2; i++) { RIA.rw0 = '.'; RIA.rw0 = HUD_COL_SAGEGREEN; RIA.rw0 = bg; }
         } else {
-            // const char* names[] = {"C-","C#","D-","D#","E-","F-","F#","G-","G#","A-","A#","B-"};
-            uint8_t n = cell->note % 12;
-            uint8_t oct = (cell->note / 12) - 1;
-            RIA.rw0 = note_names[n][0]; RIA.rw0 = HUD_COL_WHITE; RIA.rw0 = bg;
-            RIA.rw0 = note_names[n][1]; RIA.rw0 = HUD_COL_WHITE; RIA.rw0 = bg;
-            RIA.rw0 = '0' + oct;   RIA.rw0 = HUD_COL_WHITE; RIA.rw0 = bg;
+            // Cell has note or effect: show content
+            
+            // Note part (3 chars)
+            if (cell->note == 0) {
+                // No note but has effect: show dots for note
+                for(int i=0; i<3; i++) { RIA.rw0 = '.'; RIA.rw0 = HUD_COL_WHITE; RIA.rw0 = bg; }
+            } else if (cell->note == 255) {
+                // Note off
+                RIA.rw0 = '='; RIA.rw0 = HUD_COL_WHITE; RIA.rw0 = bg;
+                RIA.rw0 = '='; RIA.rw0 = HUD_COL_WHITE; RIA.rw0 = bg;
+                RIA.rw0 = '='; RIA.rw0 = HUD_COL_WHITE; RIA.rw0 = bg;
+            } else {
+                // Normal note
+                uint8_t n = cell->note % 12;
+                uint8_t oct = (cell->note / 12) - 1;
+                RIA.rw0 = note_names[n][0]; RIA.rw0 = HUD_COL_WHITE; RIA.rw0 = bg;
+                RIA.rw0 = note_names[n][1]; RIA.rw0 = HUD_COL_WHITE; RIA.rw0 = bg;
+                RIA.rw0 = '0' + oct;   RIA.rw0 = HUD_COL_WHITE; RIA.rw0 = bg;
+            }
 
             if (!effect_view_mode) {
                 // Instrument (2 chars: Magenta)
@@ -160,21 +174,12 @@ void render_row(uint8_t row_idx) {
                 RIA.rw0 = hex_chars[cell->vol >> 4];    RIA.rw0 = HUD_COL_SAGEGREEN;   RIA.rw0 = bg;
                 RIA.rw0 = hex_chars[cell->vol & 0x0F];  RIA.rw0 = HUD_COL_SAGEGREEN;   RIA.rw0 = bg;
             } else {
-                // Effect (4 chars: Yellow)
+                // Effect (4 chars: Yellow/Orange/Cyan/Cyan)
                 RIA.rw0 = hex_chars[(cell->effect >> 12) & 0x0F]; RIA.rw0 = HUD_COL_YELLOW; RIA.rw0 = bg;
-                RIA.rw0 = hex_chars[(cell->effect >> 8) & 0x0F];  RIA.rw0 = HUD_COL_RED; RIA.rw0 = bg;
+                RIA.rw0 = hex_chars[(cell->effect >> 8) & 0x0F];  RIA.rw0 = HUD_COL_ORANGE; RIA.rw0 = bg;
                 RIA.rw0 = hex_chars[(cell->effect >> 4) & 0x0F];  RIA.rw0 = HUD_COL_CYAN; RIA.rw0 = bg;
                 RIA.rw0 = hex_chars[cell->effect & 0x0F];         RIA.rw0 = HUD_COL_CYAN; RIA.rw0 = bg;
             }
-
-            // // Instrument (2 chars: Magenta)
-            // RIA.rw0 = hex_chars[cell->inst >> 4];   RIA.rw0 = HUD_COL_DPURPLE; RIA.rw0 = bg;
-            // RIA.rw0 = hex_chars[cell->inst & 0x0F]; RIA.rw0 = HUD_COL_DPURPLE; RIA.rw0 = bg;
-
-            // // Volume (2 chars: Green)
-            // RIA.rw0 = hex_chars[cell->vol >> 4];    RIA.rw0 = HUD_COL_SAGEGREEN;   RIA.rw0 = bg;
-            // RIA.rw0 = hex_chars[cell->vol & 0x0F];  RIA.rw0 = HUD_COL_SAGEGREEN;   RIA.rw0 = bg;
-
         }
 
         // Divider (1 char)
@@ -233,18 +238,17 @@ void update_cursor_visuals(uint8_t old_row, uint8_t new_row, uint8_t old_ch, uin
     }
 
     // --- 4. PAINT ACTIVE CELL ---
-    // Text color depends on effect_view_mode: yellow for effects, cyan for normal
-    uint8_t text_color = effect_view_mode ? HUD_COL_YELLOW : HUD_COL_CYAN;
-    
+    // Only change background color, preserve text colors
     uint8_t cell_x = 4 + (new_ch * 8);
     uint16_t cell_addr = text_message_addr + (new_y * 80 + cell_x) * 3;
     
-    RIA.addr0 = cell_addr;
-    RIA.step0 = 1; 
+    // Point to first background byte (skip char + fg)
+    RIA.addr0 = cell_addr + 2;
+    RIA.step0 = 3; // Jump to next background byte
+    
+    // Change background for all 7 characters in the cell
     for (uint8_t i = 0; i < 7; i++) {
-        RIA.addr0++;         // Skip Character
-        RIA.rw0 = text_color; 
-        RIA.rw0 = cell_color; // Apply Red or Blue BG
+        RIA.rw0 = cell_color;  // Apply Red or Blue BG
     }
 
     // --- 5. HEADER SYNC (Row 27) ---
