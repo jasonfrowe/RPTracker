@@ -163,10 +163,10 @@ int main(void)
             update_meters();
 
             // Playhead Visuals
-            // if (play_row != last_p_row || !seq.is_playing) {
-            //     mark_playhead(play_row);
-            //     last_p_row = play_row;
-            // }
+            if (play_row != last_p_row || !seq.is_playing) {
+                mark_playhead(play_row);
+                last_p_row = play_row;
+            }
             
             // --- UI REFRESH: Row or Channel Movement
             if (cur_row != prev_row || cur_channel != prev_chan || edit_mode != prev_edit_mode) {

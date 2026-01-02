@@ -724,16 +724,25 @@ void modify_volume_effects(int8_t delta) {
         PatternCell cell;
         read_cell(cur_pattern, cur_row, cur_channel, &cell);
 
+        // Separate the effect into High Byte and Low Byte
+        uint8_t hi = (uint8_t)(cell.effect >> 8);
+        uint8_t lo = (uint8_t)(cell.effect & 0x00FF);
+
         if (is_shift_down()) {
-            // Highest Nibble (Command): 0x1000
-            // Example: 0100 -> 1100
-            cell.effect += (delta * 0x1000);
+            // Edit Digit 1 (Command: bits 12-15)
+            uint8_t cmd = (hi >> 4);
+            cmd = (cmd + delta) & 0x0F; // Apply delta and wrap 0-F
+            hi = (cmd << 4) | (hi & 0x0F); // Re-insert while preserving Digit 2
         } 
         else {
-            // Second Nibble (Style): 0x0100
-            // Example: 0100 -> 0200
-            cell.effect += (delta * 0x0100);
+            // Edit Digit 2 (Style: bits 8-11)
+            uint8_t style = (hi & 0x0F);
+            style = (style + delta) & 0x0F; // Apply delta and wrap 0-F
+            hi = (hi & 0xF0) | style; // Re-insert while preserving Digit 1
         }
+
+        // Re-pack into 16-bit effect
+        cell.effect = ((uint16_t)hi << 8) | lo;
 
         write_cell(cur_pattern, cur_row, cur_channel, &cell);
         render_row(cur_row);
@@ -741,25 +750,19 @@ void modify_volume_effects(int8_t delta) {
         mark_playhead(play_row);
     } 
     else {
-        // --- VOLUME EDITING ---
+        // --- VOLUME EDITING (Remains Linear) ---
         if (is_shift_down()) {
-            // In-place Cell Volume Edit
             PatternCell cell;
             read_cell(cur_pattern, cur_row, cur_channel, &cell);
-            
             int16_t v = (int16_t)cell.vol + delta;
             if (v > 63) v = 63; if (v < 0) v = 0;
             cell.vol = (uint8_t)v;
-            
             write_cell(cur_pattern, cur_row, cur_channel, &cell);
             render_row(cur_row);
             mark_playhead(play_row);
-            
-            // Live Preview
             OPL_SetVolume(cur_channel, cell.vol << 1);
         } 
         else {
-            // Global Brush Volume Edit
             int16_t v = (int16_t)current_volume + delta;
             if (v > 63) v = 63; if (v < 0) v = 0;
             current_volume = (uint8_t)v;
@@ -772,13 +775,20 @@ void modify_effect_low_byte(int8_t delta) {
     PatternCell cell;
     read_cell(cur_pattern, cur_row, cur_channel, &cell);
 
-    // Apply delta to the bottom 8 bits (0x00FF)
-    // Shift increases the step to help scroll through 00-FF faster
-    int16_t step = is_shift_down() ? (delta * 16) : delta;
+    // Determine the step (1 or 16)
+    uint8_t step = is_shift_down() ? 16 : 1;
     
+    // Extract only the low byte
     uint8_t lo = (uint8_t)(cell.effect & 0xFF);
-    lo += (uint8_t)step;
     
+    if (delta > 0) {
+        lo += step; // Wraps 0xFF to 0x00 automatically
+    } else {
+        lo -= step; // Wraps 0x00 to 0xFF automatically
+    }
+
+    // Mask out the old low byte and insert the new one
+    // (cell.effect & 0xFF00) preserves Digits 1 and 2
     cell.effect = (cell.effect & 0xFF00) | lo;
 
     write_cell(cur_pattern, cur_row, cur_channel, &cell);
