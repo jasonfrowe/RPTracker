@@ -1031,16 +1031,16 @@ void pattern_paste(uint8_t pat_idx) {
     printf("Pattern %02X Pasted.\n", pat_idx);
 }
 
-void OPL_Panic(void) {
-    for (uint8_t i = 0; i < 9; i++) {
-        // Clear bit 5 (Key-On) for all 9 channels
-        // We write 0x00 to registers $B0 through $B8
-        OPL_Write(0xB0 + i, 0x00);
-    }
+// void OPL_Panic(void) {
+//     for (uint8_t i = 0; i < 9; i++) {
+//         // Clear bit 5 (Key-On) for all 9 channels
+//         // We write 0x00 to registers $B0 through $B8
+//         OPL_Write(0xB0 + i, 0x00);
+//     }
     
-    // Reset our "keyboard memory" so the next piano press works cleanly
-    active_midi_note = 0; 
-}
+//     // Reset our "keyboard memory" so the next piano press works cleanly
+//     active_midi_note = 0; 
+// }
 
 void modify_effect(int8_t delta) {
     PatternCell cell;

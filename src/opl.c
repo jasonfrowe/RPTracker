@@ -6,6 +6,8 @@
 #include "instruments.h"
 #include "constants.h"
 #include "effects.h"
+#include "player.h"
+#include "screen.h"
 
 #ifdef USE_NATIVE_OPL2
 // F-Number table for Octave 4 @ 3.58 MHz
@@ -258,22 +260,54 @@ void OPL_NoteOn_Detuned(uint8_t channel, uint8_t midi_note, int8_t detune) {
     shadow_b0[channel] = high_byte & 0x1F;
 }
 
-// void OPL_SetPitch(uint8_t channel, uint8_t midi_note) {
-//     if (channel > 8) return;
+void OPL_Write_Force(uint8_t reg, uint8_t data) {
+    // We update the shadow so it stays in sync, 
+    // but we DO NOT check it to skip the write.
+    opl_hardware_shadow[reg] = data;
 
-//     // Use your existing helper to calculate Block and F-Number
-//     // High Byte: 0x20 (KeyOn) | Block << 2 | F-Number High (2 bits)
-//     // Low Byte: F-Number Low (8 bits)
-//     uint16_t freq = midi_to_opl_freq(midi_note);
+#ifdef USE_NATIVE_OPL2
+    RIA.addr1 = OPL_ADDR + reg;
+    RIA.rw1 = data;
+#else
+    RIA.addr1 = OPL_ADDR;
+    RIA.step1 = 1;
+    RIA.rw1 = reg;
+    RIA.rw1 = data;
+#endif
+}
 
-//     // Write F-Number Low to $A0-$A8
-//     OPL_Write(0xA0 + channel, freq & 0xFF);
-
-//     // Write Block/F-Num High to $B0-$B8
-//     // We force bit 5 (0x20) to 1 to ensure the note continues to sustain
-//     uint8_t b_val = ((freq >> 8) & 0xFF) | 0x20;
-//     OPL_Write(0xB0 + channel, b_val);
+void OPL_Panic(void) {
+    static const uint8_t car_offsets[] = {0x03, 0x04, 0x05, 0x0B, 0x0C, 0x0D, 0x13, 0x14, 0x15};
     
-//     // Update the logic shadow so NoteOff knows the last frequency used
-//     shadow_b0[channel] = b_val & 0x1F; 
-// }
+    // Stop the sequencer if it's running
+    seq.is_playing = false;
+
+    for (uint8_t i = 0; i < 9; i++) {
+        // 1. Force Key-Off (Register $B0-$B8)
+        OPL_Write_Force(0xB0 + i, 0x00);
+        
+        // 2. Force Volume to Silence (Total Level = 63 / 0x3F)
+        // This stops notes with long "Release" values immediately.
+        OPL_Write_Force(0x40 + car_offsets[i], 0x3F);
+
+        // 3. Kill ALL Logic Engines for this channel
+        ch_arp[i].active = false;
+        ch_vibrato[i].active = false;
+        ch_volslide[i].active = false;
+        ch_porta[i].active = false;
+        ch_retrigger[i].active = false;
+        ch_notecut[i].active = false;
+        
+        // 4. Reset internal software trackers
+        shadow_b0[i] = 0;
+        ch_peaks[i] = 0;
+    }
+
+    // 5. Reset global keyboard memory
+    active_midi_note = 0;
+    
+    // 6. Reset Effect Shadowing so the next note is forced to send everything
+    for (int i = 0; i < 9; i++) last_effect[i] = 0xFFFF;
+
+    printf("PANIC: Hardware Muted & Logic Reset.\n");
+}
