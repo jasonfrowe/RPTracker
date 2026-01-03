@@ -320,39 +320,31 @@ void process_notecut_logic(uint8_t ch) {
 
 void process_notedelay_logic(uint8_t ch) {
     if (!ch_notedelay[ch].active) return;
-
-    // Skip Tick 0 (handled by Sequencer)
     if (seq.tick_counter == 0) return;
 
     ch_notedelay[ch].tick_counter++;
 
     if (ch_notedelay[ch].tick_counter >= ch_notedelay[ch].delay_tick) {
-        // --- TIME TO FIRE AN ECHO ---
-        
-        // 1. Calculate the faded volume for the NEXT echo
-        // We drop the volume by roughly 25% each bounce (Shift right by 2 and subtract)
-        uint8_t decay = (ch_notedelay[ch].vol >> 2); 
-        if (decay == 0) decay = 4; // Minimum decay to ensure it eventually stops
-        
-        if (ch_notedelay[ch].vol > decay) {
-            ch_notedelay[ch].vol -= decay;
+        // --- IMPROVED LOGARITHMIC DECAY ---
+        // A fixed drop of 6 units (approx 4.5dB) feels much smoother
+        // than a percentage-based drop.
+        uint8_t decay_step = 6; 
+
+        if (ch_notedelay[ch].vol > decay_step) {
+            ch_notedelay[ch].vol -= decay_step;
+
+            // Trigger the echo bounce
+            OPL_NoteOff(ch);
+            OPL_SetPatch(ch, &gm_bank[ch_notedelay[ch].inst]);
+            OPL_SetVolume(ch, ch_notedelay[ch].vol << 1); // Maintain MIDI mapping
+            OPL_NoteOn(ch, ch_notedelay[ch].note);
+            
+            ch_peaks[ch] = ch_notedelay[ch].vol;
+            ch_notedelay[ch].tick_counter = 0; // Reset for next bounce
         } else {
+            // Volume has faded to effectively silent
             ch_notedelay[ch].vol = 0;
-        }
-
-        // 2. Strike the hardware
-        OPL_NoteOff(ch);
-        OPL_SetPatch(ch, &gm_bank[ch_notedelay[ch].inst]);
-        OPL_SetVolume(ch, ch_notedelay[ch].vol << 1);
-        OPL_NoteOn(ch, ch_notedelay[ch].note);
-        ch_peaks[ch] = ch_notedelay[ch].vol;
-
-        // 3. RE-SCHEDULE OR STOP
-        if (ch_notedelay[ch].vol > 0) {
-            ch_notedelay[ch].tick_counter = 0; // Reset timer for next bounce
-            // active remains true!
-        } else {
-            ch_notedelay[ch].active = false;   // Echo died out
+            ch_notedelay[ch].active = false;
         }
     }
 }
