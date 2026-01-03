@@ -150,54 +150,38 @@ void process_arp_logic(uint8_t ch) {
 void process_portamento_logic(uint8_t ch) {
     if (!ch_porta[ch].active) return;
 
+    // --- TICK 0 GUARD ---
+    // Let the sequencer handle the initial note strike on Tick 0.
+    if (seq.tick_counter == 0) return;
+
     ch_porta[ch].tick_counter++;
 
-    // Wait for speed delay
+    // Wait for speed delay (D)
     if (ch_porta[ch].tick_counter < ch_porta[ch].speed) return;
-
     ch_porta[ch].tick_counter = 0;
 
     uint8_t current = ch_porta[ch].current_note;
     uint8_t target = ch_porta[ch].target_note;
-    bool reached_target = false;
 
-    // Calculate next note based on mode
-    if (ch_porta[ch].mode == 0) { // Up
-        if (current < 127) {
-            current++;
-            if (target > 0 && current >= target) reached_target = true;
-        } else {
-            reached_target = true;
-        }
-    } else if (ch_porta[ch].mode == 1) { // Down
-        if (current > 0) {
-            current--;
-            if (target > 0 && current <= target) reached_target = true;
-        } else {
-            reached_target = true;
-        }
-    } else if (ch_porta[ch].mode == 2) { // To Target
-        if (current < target) {
-            current++;
-        } else if (current > target) {
-            current--;
-        } else {
-            reached_target = true;
-        }
-    }
-
-    // Stop if reached target
-    if (reached_target) {
+    if (current < target) {
+        current++; // Slide Up
+    } else if (current > target) {
+        current--; // Slide Down
+    } else {
+        // Target reached: stop the effect logic but keep the note ringing
         ch_porta[ch].active = false;
         return;
     }
 
-    // Update note
+    // Update the state
     ch_porta[ch].current_note = current;
-    OPL_NoteOff(ch);
-    OPL_SetPatch(ch, &gm_bank[ch_porta[ch].inst]);
-    OPL_SetVolume(ch, ch_porta[ch].vol << 1);
-    OPL_NoteOn(ch, current);
+
+    // --- THE FIX: SMOOTH PITCH UPDATE ---
+    // Use OPL_SetPitch (like Vibrato) to change frequency 
+    // without triggering a new 'attack' or 'beep'.
+    OPL_SetPitch(ch, current);
+    
+    // Keep the meters alive
     ch_peaks[ch] = ch_porta[ch].vol;
 }
 
