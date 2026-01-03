@@ -254,41 +254,33 @@ Perfect for drum programming, rhythmic patterns, and tight, punchy sequences.
 
 ---
 
-### ⏱️ Effect Command 6: Note Delay (6NDT)
-Note Delay triggers a note after a specified delay, enabling polyrhythms, echo effects, and complex timing.
-Creates notes that appear "between" the grid lines for humanization and groove.
+### ⏱️ Effect Command 6: Automatic Feedback Echo (6VDT)
+This effect creates a rhythmic, decaying series of echoes on the same channel. Unlike a standard delay, this engine triggers the original note immediately on the beat and then schedules "bounces" that fade away over time.
 
-**Format: `6 N D T`**
+**Format: `1 V D T`** (where 6 is the command ID)
 
-*   **6**: Command ID (Note Delay).
-*   **N (Note Offset)**: Semitone offset from base note (0-F):
-    *   `0`: Same as base note
-    *   `1-C`: +1 to +12 semitones higher
-    *   `D-F`: +13 to +15 semitones higher
-    
-*   **D (Delay Time)**: Ticks before triggering (0-F):
-    *   `0`: Defaults to 6 ticks (half row)
-    *   `1-3`: Early trigger (1-3 ticks in)
-    *   `4-6`: Mid-row trigger
-    *   `7-9`: Late trigger (before next row)
-    *   `A-F`: Very late trigger (into next row)
+*   **V (Volume)**: The starting volume of the *first* echo (0-F). 
+    *   Each subsequent bounce automatically decays (drops by ~25%) until the volume hits zero.
+*   **D (Delay)**: The number of ticks between each bounce (1-F). 
+    *   Lower values create a "buzz" or "slapback"; higher values create rhythmic "galloping" echoes.
+*   **T (Transpose)**: Pitch offset for the echoes in semitones (0-F). 
+    *   All bounces will be shifted by this amount relative to the original note.
 
-*   **T (Octave Offset)**: Additional octave shift (0-F):
-    *   `0`: No octave shift
-    *   `1`: +12 semitones (1 octave up)
-    *   `2`: +24 semitones (2 octaves up)
-    *   etc.
-
-**Usage:**
-- `6030`: Delay base note by 3 ticks (swing feel).
-- `6760`: Delay note +7 semitones (perfect fifth) by 6 ticks (harmony delay).
-- `6041`: Delay base note by 4 ticks, 1 octave up (echo effect).
-- `60C0`: Delay base note by 12 ticks (2 rows) - polyrhythm.
+**Usage Examples:**
+- `6F40`: **Classic Echo.** The note repeats at full volume after 4 ticks and then slowly fades away while looping.
+- `6C27`: **Harmonic Strum.** A Perfect 5th (+7 semitones) repeats every 2 ticks, sounding like a fast, cascading chord.
+- `691C`: **Octave Thickener.** Adds a fast, quieter octave-up double (+12 semitones) every 1 tick for a "shimmer" effect.
+- `6F10`: **Slapback.** A single fast, loud repeat that adds weight to percussion or leads.
 
 **Notes:**
-- Note is triggered even if sequencer advances to next row.
-- Perfect for swing timing, echo effects, and chord spreads.
-- Combine with note cut for complex rhythmic patterns.
+- **Persistence:** The echo continues to bounce across empty rows (`0000`) until the volume reaches zero.
+- **Auto-Kill:** Entering a new note on the channel or using `F000` will immediately kill any active echo feedback.
+- **Monophonic Nature:** Since the OPL2 is monophonic per channel, each echo bounce will cut off the tail of the previous bounce.
+
+---
+
+### 💡 Pro-Tip for Composers
+Because the echoes retrigger the instrument, this effect works best with **Pluck** or **Percussive** patches (Piano, Glockenspiel, Guitar). If used with a long "Sustain" patch (like a Flute or Pad), the echo will sound like a rhythmic "re-bowing" of the note.
 
 ---
 

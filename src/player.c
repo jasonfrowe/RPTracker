@@ -401,28 +401,29 @@ void sequencer_step(void) {
                     ch_notecut[ch].cut_tick = cut_tick;
                     ch_notecut[ch].tick_counter = 0;
                 } else if (cmd == 6) {
-                    // Note Delay: 6NDT
-                    // N = Note (0-F, 0=C, 1=C#, etc.)
-                    // D = Delay ticks (0-F)
-                    // T = Octave offset from base (0-F)
-                    uint8_t note_offset = (eff >> 8) & 0x0F;
-                    uint8_t delay_tick = (eff >> 4) & 0x0F;
-                    uint8_t octave_offset = (eff & 0x0F);
+                    // Automatic Echo: 6VDT
+                    uint8_t echo_vol_nibble = (eff >> 8) & 0x0F;
+                    uint8_t delay_ticks     = (eff >> 4) & 0x0F;
+                    uint8_t transposition   = (eff & 0x0F);
                     
-                    if (delay_tick == 0) delay_tick = 6; // Default to half row
-                    
-                    // Calculate absolute note
+                    // 1. Capture the "Parent" note context
+                    // Use the note on this row, or fall back to the last played note
                     uint8_t base = (cell.note != 0 && cell.note != 255) ? cell.note : ch_arp[ch].base_note;
-                    uint8_t delayed_note = base + note_offset + (octave_offset * 12);
-                    if (delayed_note > 127) delayed_note = 127;
-                    
+
+                    // 2. Setup the Echo State
                     ch_notedelay[ch].active = true;
-                    ch_notedelay[ch].delay_tick = delay_tick;
-                    ch_notedelay[ch].note = delayed_note;
-                    ch_notedelay[ch].inst = (cell.note != 0 && cell.note != 255) ? cell.inst : ch_arp[ch].inst;
-                    ch_notedelay[ch].vol = (cell.note != 0 && cell.note != 255) ? cell.vol : ch_arp[ch].vol;
                     ch_notedelay[ch].tick_counter = 0;
-                    ch_notedelay[ch].triggered = false;
+                    ch_notedelay[ch].delay_tick = (delay_ticks == 0) ? 1 : delay_ticks;
+                    
+                    // Calculate Echo Properties
+                    ch_notedelay[ch].note = base + transposition;
+                    if (ch_notedelay[ch].note > 127) ch_notedelay[ch].note = 127;
+                    
+                    ch_notedelay[ch].vol = (echo_vol_nibble * 63) / 15; // Scale 0-F to 0-63
+                    ch_notedelay[ch].inst = (cell.note != 0) ? cell.inst : ch_arp[ch].inst;
+
+                    // Note: We do NOT set skip_note_trigger. 
+                    // The note in cell.note will play normally on Tick 0.
                 } else if (cmd == 7) {
                     // Retrigger: 7__T
                     // T = Ticks between retriggers (0-F)
