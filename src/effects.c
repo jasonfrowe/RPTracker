@@ -1,3 +1,4 @@
+#include <rp6502.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -20,6 +21,18 @@ FinePitchState ch_finepitch[9];
 
 const uint8_t arp_tick_lut[16] = {
     1, 2, 3, 6, 9, 12, 18, 24, 30, 36, 42, 48, 60, 72, 84, 96
+};
+
+// Scale intervals (semitones from root)
+const uint8_t scale_intervals[8][16] = {
+    {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15}, // 0: Chromatic
+    {0,2,4,5,7,9,11,12,14,16,17,19,21,23,24}, // 1: Major
+    {0,2,3,5,7,8,10,12,14,15,17,19,20,22,24}, // 2: Minor
+    {0,2,4,7,9,12,14,16,19,21,24,26,28,31,33}, // 3: Maj Pentatonic
+    {0,3,5,7,10,12,15,17,19,22,24,27,29,31,34}, // 4: Min Pentatonic
+    {0,2,4,6,8,10,12,14,16,18,20,22,24,26,28}, // 5: Whole Tone
+    {0,2,3,5,6,8,9,11,12,14,15,17,18,20,21},    // 6: Diminished
+    {0,7,12,19,24,31,36,43,48,55,60,67,72,79}   // 7: 5ths & Octaves
 };
 
 // Add this to effects.c
@@ -433,4 +446,29 @@ void process_finepitch_logic(uint8_t ch) {
     // Fine pitch is applied once on trigger, not per-tick
     // The detune is handled by OPL frequency offset
     // This is a no-op per-tick processor (effect is instant)
+}
+
+void process_gen_logic(uint8_t ch) {
+    if (!ch_gen[ch].active) return;
+    if (seq.tick_counter == 0) return; // Let sequencer strike the root
+
+    ch_gen[ch].timer++;
+    if (ch_gen[ch].timer < ch_gen[ch].target_ticks) return;
+
+    ch_gen[ch].timer = 0;
+
+    // --- GENERATIVE STEP ---
+    // 1. Pick a random index within the Depth (D) range
+    // Using RIA.vsync as a seed for the 6502
+    uint8_t random_step = RIA.vsync % (ch_gen[ch].range + 1);
+    
+    // 2. Look up the semitone offset for the current scale
+    uint8_t offset = scale_intervals[ch_gen[ch].scale & 0x07][random_step];
+
+    // 3. RETRIGGER
+    OPL_NoteOff(ch);
+    OPL_SetPatch(ch, &gm_bank[ch_gen[ch].inst]);
+    OPL_SetVolume(ch, ch_gen[ch].vol << 1); 
+    OPL_NoteOn(ch, ch_gen[ch].base_note + offset);
+    ch_peaks[ch] = ch_gen[ch].vol;
 }

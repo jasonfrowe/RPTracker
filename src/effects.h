@@ -26,17 +26,7 @@ typedef struct {
     bool    active;
 } PortamentoState;
 
-// typedef struct {
-//     uint8_t current_vol;
-//     uint8_t target_vol;
-//     uint8_t inst;
-//     uint8_t base_note;
-//     uint8_t mode;         // 0=Up, 1=Down, 2=To Target
-//     uint8_t speed;        // Volume units per tick
-//     uint8_t tick_counter;
-//     bool    active;
-// } VolumeSlideState;
-
+// Volume Slide State with 8.8 Fixed Point Arithmetic
 typedef struct {
     uint8_t current_vol;
     uint8_t base_note;
@@ -107,6 +97,17 @@ typedef struct {
     bool    active;
 } FinePitchState;
 
+typedef struct {
+    uint8_t base_note;
+    uint8_t inst;
+    uint8_t vol;
+    uint8_t scale;
+    uint8_t range;       // D nibble
+    uint8_t target_ticks;
+    uint8_t timer;
+    bool    active;
+} GenState;
+
 extern ArpState ch_arp[9];
 extern PortamentoState ch_porta[9];
 extern VolumeSlideState ch_volslide[9];
@@ -116,6 +117,7 @@ extern NoteDelayState ch_notedelay[9];
 extern RetriggerState ch_retrigger[9];
 extern TremoloState ch_tremolo[9];
 extern FinePitchState ch_finepitch[9];
+extern GenState ch_gen[9];
 
 extern void process_arp_logic(uint8_t ch);
 extern void process_portamento_logic(uint8_t ch);
@@ -128,5 +130,6 @@ extern void process_tremolo_logic(uint8_t ch);
 extern void process_finepitch_logic(uint8_t ch);
 extern int16_t get_arp_offset(uint8_t style, uint8_t depth, uint8_t index);
 extern const uint8_t arp_tick_lut[16];
+extern void process_gen_logic(uint8_t ch);
 
 #endif // EFFECTS_C

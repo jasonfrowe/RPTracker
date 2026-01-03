@@ -386,6 +386,27 @@ Adds richness and width to sounds without full semitone shifts.
 
 ---
 
+### 🎲 Effect Command A: Stochastic Generator (ASDT)
+Creates infinite, scale-locked random melodies. The engine picks a random note from a specific musical scale every T ticks.
+
+**Format: `A S D T`**
+
+*   **S (Scale)**: DNA of the melody:
+    *   `0`: Chromatic (Chaos)
+    *   `1`: Major
+    *   `2`: Minor
+    *   `3`: Major Pentatonic (Safe/Happy)
+    *   `4`: Minor Pentatonic (Blues/Rock)
+    *   `5`: Whole Tone (Dreamy)
+*   **D (Depth)**: Range of the "wander" (1-F steps up the scale).
+*   **T (Timing)**: How often to pick a new note (mapped to Musical LUT).
+
+**Usage:**
+- `A372`: Fast "computer glitch" sounds in Major Pentatonic (Range: 7 notes).
+- `A4F7`: Slow, bluesy random background notes (Range: 2 octaves, Speed: 2 rows).
+
+---
+
 ## 🎚️ Combining Effects
 
 Effects in RPTracker can run simultaneously or sequentially, but some combinations have specific behaviors and limitations.

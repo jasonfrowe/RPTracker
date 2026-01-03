@@ -484,6 +484,12 @@ void sequencer_step(void) {
                     OPL_NoteOn_Detuned(ch, ch_finepitch[ch].base_note, detune);
                     
                     ch_peaks[ch] = ch_finepitch[ch].vol;
+                } else if (cmd == 0x0A) { // Random Generator
+                    ch_gen[ch].active = true;
+                    ch_gen[ch].scale  = (eff >> 8) & 0x0F;
+                    ch_gen[ch].range  = (eff >> 4) & 0x0F;
+                    ch_gen[ch].target_ticks = arp_tick_lut[eff & 0x0F];
+                    ch_gen[ch].timer = 0;
                 } else if (eff == 0xF000 || (cell.note != 0 && cmd == 0)) {
                     if (ch_tremolo[ch].active) {
                         ch_tremolo[ch].active = false;
@@ -501,6 +507,9 @@ void sequencer_step(void) {
                     // Deactivate vibrato - don't reset pitch here because
                     // a new note trigger will follow and set its own pitch
                     ch_vibrato[ch].active = false;
+
+                    ch_gen[ch].active = false;
+
                 }
                 // Note: Removed the "else if (cmd == 0 && eff == 0x0000)" handler
                 // Empty rows should NOT reset vibrato pitch - let it oscillate freely
@@ -517,6 +526,7 @@ void sequencer_step(void) {
                     ch_tremolo[ch].active = false;
                     ch_retrigger[ch].active = false;
                     ch_vibrato[ch].active = false;
+                    ch_gen[ch].active = false;
                 }
                 
                 OPL_NoteOff(ch); 
