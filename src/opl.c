@@ -285,13 +285,17 @@ void OPL_Config(uint8_t enable, uint16_t addr) {
 }
 
 void OPL_NoteOn_Detuned(uint8_t channel, uint8_t midi_note, int8_t detune) {
+    if (channel > 8) return;
+
     uint16_t freq = midi_to_opl_freq(midi_note);
     uint16_t fnum = freq & 0x3FF; 
     uint8_t block = (freq >> 10) & 0x07; 
 
-    // Multiplier of 4 creates a visible/audible shift 
-    // Max detune (7) becomes +28 F-number units (approx quarter-tone)
-    int16_t adjusted_fnum = (int16_t)fnum + (detune * 4);
+    // --- THE ADJUSTMENT ---
+    // Multiplier of 2:
+    // Max Detune 7: +14 F-Num units (approx 2/3rds of a semitone)
+    // Min Detune 8: -16 F-Num units (approx 3/4ths of a semitone)
+    int16_t adjusted_fnum = (int16_t)fnum + (detune * 1);
 
     if (adjusted_fnum < 1) adjusted_fnum = 1;
     if (adjusted_fnum > 1023) adjusted_fnum = 1023;
@@ -299,6 +303,8 @@ void OPL_NoteOn_Detuned(uint8_t channel, uint8_t midi_note, int8_t detune) {
     OPL_Write(0xA0 + channel, adjusted_fnum & 0xFF);
     uint8_t b_val = 0x20 | (block << 2) | ((adjusted_fnum >> 8) & 0x03);
     OPL_Write(0xB0 + channel, b_val);
+    
+    shadow_b0[channel] = b_val & 0x1F;
 }
 
 void OPL_Write_Force(uint8_t reg, uint8_t data) {
