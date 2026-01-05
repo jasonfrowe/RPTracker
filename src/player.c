@@ -525,6 +525,9 @@ void sequencer_step(void) {
 
             PatternCell cell;
             read_cell(cur_pattern, play_row, ch, &cell);
+
+            // Reset just_triggered flags for effects that need it
+            bool fine_pitch_triggered = false;
             
             // --- 1. IDEMPOTENT EFFECT PARSING ---
             if (cell.effect != last_effect[ch]) {
@@ -719,14 +722,10 @@ void sequencer_step(void) {
                     }
                 } else if (cmd == 9) {
                     // Fine Pitch: 9__D
-                    // D = Detune nibble (0-7 = UP, 8-F = DOWN)
                     uint8_t detune_raw = (eff & 0x0F);
-                    
-                    // Convert nibble to signed integer:
-                    // 0..7 stays 0..7
-                    // 8..F becomes -8..-1
                     int8_t detune = (detune_raw < 8) ? (int8_t)detune_raw : (int8_t)detune_raw - 16;
                     
+                    // Deciding the note to play:
                     uint8_t note = (cell.note != 0 && cell.note != 255) ? cell.note : ch_arp[ch].base_note;
                     
                     ch_finepitch[ch].active = true;
@@ -735,15 +734,18 @@ void sequencer_step(void) {
                     ch_finepitch[ch].inst = (cell.note != 0 && cell.note != 255) ? cell.inst : ch_arp[ch].inst;
                     ch_finepitch[ch].vol = (cell.note != 0 && cell.note != 255) ? cell.vol : ch_arp[ch].vol;
                     
-                    // Apply fine pitch immediately
+                    // Strike the detuned note now
                     OPL_NoteOff(ch);
                     OPL_SetPatch(ch, &gm_bank[ch_finepitch[ch].inst]);
-                    OPL_SetVolume(ch, ch_finepitch[ch].vol); // Helper handles << 1
+                    OPL_SetVolume(ch, ch_finepitch[ch].vol << 1); 
                     
-                    // USE THE NEW DETUNED FUNCTION
-                    OPL_NoteOn_Detuned(ch, ch_finepitch[ch].base_note, detune);
+                    // CALL THE DETUNED FUNCTION
+                    OPL_NoteOn_Detuned(ch, note, detune);
                     
                     ch_peaks[ch] = ch_finepitch[ch].vol;
+
+                    // --- THE FIX: Mark this as handled! ---
+                    fine_pitch_triggered = true; 
                 } else if (cmd == 0x0A) { // Random Generator: A S D T
                     ch_generator[ch].active = true;
                     ch_generator[ch].scale  = (eff >> 8) & 0x0F;
@@ -798,7 +800,7 @@ void sequencer_step(void) {
             }
 
             // --- 2. TRIGGER NOTE WITH OFFSET ---
-            if (cell.note != 0) {
+            if (cell.note != 0 && !fine_pitch_triggered) {
                 // Deactivate effects when new note + no effect command (cmd=0)
                 // This handles the case where effect column is 0000 but last_effect was also 0000
                 // (so effect parsing block was skipped)

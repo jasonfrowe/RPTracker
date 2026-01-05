@@ -285,35 +285,20 @@ void OPL_Config(uint8_t enable, uint16_t addr) {
 }
 
 void OPL_NoteOn_Detuned(uint8_t channel, uint8_t midi_note, int8_t detune) {
-    if (channel > 8) return;
+    uint16_t freq = midi_to_opl_freq(midi_note);
+    uint16_t fnum = freq & 0x3FF; 
+    uint8_t block = (freq >> 10) & 0x07; 
 
-    if (midi_note < 12) midi_note = 12;
-    int block = (midi_note / 12) - 1;
-    int note_idx = midi_note % 12;
-    if (block > 7) block = 7;
+    // Multiplier of 4 creates a visible/audible shift 
+    // Max detune (7) becomes +28 F-number units (approx quarter-tone)
+    int16_t adjusted_fnum = (int16_t)fnum + (detune * 4);
 
-    // 1. Get base F-Number from table
-    uint16_t f_num = fnum_table[note_idx];
-
-    // 2. Apply Detune
-    // A detune of 1 (1/16th semitone) is roughly 2 units of F-Number.
-    // We cast to int16 to handle negative results safely.
-    int16_t adjusted_fnum = (int16_t)f_num + (detune * 2);
-
-    // 3. Handle Underflow/Overflow
-    // If the detune pushes us out of the current F-Number range (1-1023),
-    // we clamp it. (Pro version would shift blocks, but clamping is safe for "fine").
     if (adjusted_fnum < 1) adjusted_fnum = 1;
     if (adjusted_fnum > 1023) adjusted_fnum = 1023;
 
-    // 4. Write to OPL2
-    uint8_t high_byte = 0x20 | (block << 2) | ((adjusted_fnum >> 8) & 0x03);
-    uint8_t low_byte = adjusted_fnum & 0xFF;
-
-    OPL_Write(0xA0 + channel, low_byte);
-    OPL_Write(0xB0 + channel, high_byte);
-    
-    shadow_b0[channel] = high_byte & 0x1F;
+    OPL_Write(0xA0 + channel, adjusted_fnum & 0xFF);
+    uint8_t b_val = 0x20 | (block << 2) | ((adjusted_fnum >> 8) & 0x03);
+    OPL_Write(0xB0 + channel, b_val);
 }
 
 void OPL_Write_Force(uint8_t reg, uint8_t data) {
