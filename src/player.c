@@ -639,23 +639,24 @@ void sequencer_step(void) {
                 } else if (cmd == 6) {
                     // Automatic Echo: 6VDT
                     uint8_t echo_vol_nibble = (eff >> 8) & 0x0F;
-                    uint8_t delay_ticks     = (eff >> 4) & 0x0F;
+                    uint8_t delay_nibble     = (eff >> 4) & 0x0F;
                     uint8_t transposition   = (eff & 0x0F);
                     
-                    // 1. Capture the "Parent" note context
-                    // Use the note on this row, or fall back to the last played note
                     uint8_t base = (cell.note != 0 && cell.note != 255) ? cell.note : ch_arp[ch].base_note;
 
-                    // 2. Setup the Echo State
                     ch_notedelay[ch].active = true;
-                    ch_notedelay[ch].tick_counter = 0;
-                    ch_notedelay[ch].delay_tick = (delay_ticks == 0) ? 1 : delay_ticks;
+                    ch_notedelay[ch].timer_fp = 0;
                     
-                    // Calculate Echo Properties
+                    // --- THE TEMPO SCALE FIX ---
+                    // One logical "tick" duration in the current tempo is (ticks_per_row_fp / 6)
+                    if (delay_nibble == 0) delay_nibble = 3; // Default to half row
+                    uint32_t one_tick_duration = seq.ticks_per_row_fp / 6;
+                    ch_notedelay[ch].target_fp = (uint16_t)(one_tick_duration * delay_nibble);
+                    
+                    // Set note, inst, and starting volume
                     ch_notedelay[ch].note = base + transposition;
                     if (ch_notedelay[ch].note > 127) ch_notedelay[ch].note = 127;
-                    
-                    ch_notedelay[ch].vol = (echo_vol_nibble * 63) / 15; // Scale 0-F to 0-63
+                    ch_notedelay[ch].vol = (echo_vol_nibble * 63) / 15;
                     ch_notedelay[ch].inst = (cell.note != 0) ? cell.inst : ch_arp[ch].inst;
 
                     // Note: We do NOT set skip_note_trigger. 

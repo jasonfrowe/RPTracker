@@ -343,29 +343,33 @@ void process_notecut_logic(uint8_t ch) {
 
 void process_notedelay_logic(uint8_t ch) {
     if (!ch_notedelay[ch].active) return;
-    if (seq.tick_counter_fp < TICK_SCALE) return;
 
-    ch_notedelay[ch].tick_counter++;
+    // Tick 0 Guard: The sequencer triggered the first note, start counting now
+    if (seq.tick_counter_fp == 0) return;
 
-    if (ch_notedelay[ch].tick_counter >= ch_notedelay[ch].delay_tick) {
-        // --- IMPROVED LOGARITHMIC DECAY ---
-        // A fixed drop of 6 units (approx 4.5dB) feels much smoother
-        // than a percentage-based drop.
-        uint8_t decay_step = 6; 
+    // 1. Accumulate one VSync frame of time
+    ch_notedelay[ch].timer_fp += 256;
 
+    // 2. Threshold check
+    if (ch_notedelay[ch].timer_fp >= ch_notedelay[ch].target_fp) {
+        
+        // --- LOGARITHMIC DECAY ---
+        uint8_t decay_step = 8; // Drop by 8 units (~6dB)
         if (ch_notedelay[ch].vol > decay_step) {
             ch_notedelay[ch].vol -= decay_step;
 
-            // Trigger the echo bounce
+            // Trigger the echo
             OPL_NoteOff(ch);
             OPL_SetPatch(ch, &gm_bank[ch_notedelay[ch].inst]);
             OPL_SetVolume(ch, ch_notedelay[ch].vol << 1); // Maintain MIDI mapping
             OPL_NoteOn(ch, ch_notedelay[ch].note);
             
             ch_peaks[ch] = ch_notedelay[ch].vol;
-            ch_notedelay[ch].tick_counter = 0; // Reset for next bounce
+            
+            // 3. Reset timer to loop the echo
+            ch_notedelay[ch].timer_fp = 0; 
         } else {
-            // Volume has faded to effectively silent
+            // Faded to silence
             ch_notedelay[ch].vol = 0;
             ch_notedelay[ch].active = false;
         }

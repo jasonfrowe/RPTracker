@@ -59,13 +59,12 @@ typedef struct {
 } NoteCutState;
 
 typedef struct {
-    uint8_t delay_tick;   // Tick count when to trigger
-    uint8_t note;         // Note to trigger
+    uint16_t timer_fp;    // Accumulator (8.8)
+    uint16_t target_fp;   // Threshold (8.8)
+    uint8_t note;
     uint8_t inst;
     uint8_t vol;
-    uint8_t tick_counter;
     bool    active;
-    bool    triggered;    // Prevent double-trigger
 } NoteDelayState;
 
 typedef struct {
