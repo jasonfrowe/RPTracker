@@ -44,7 +44,8 @@ uint16_t get_pattern_xram_addr(uint8_t pat, uint8_t row, uint8_t chan) {
 static uint8_t pattern_clipboard[PATTERN_SIZE];
 static bool clipboard_full = false;
 
-SequencerState seq = {false, 6, 0, 125};
+// Initialize: 125 BPM = 7.68 ticks/row in 8.8 fixed-point = 0x07AE (1966)
+SequencerState seq = {false, 0x07AE, 0, 125};
 
 #define KEY_REPEAT_DELAY 20 // Frames before repeat starts
 #define KEY_REPEAT_RATE  4  // Frames between repeats
@@ -75,6 +76,22 @@ static int8_t get_semitone(uint8_t scancode) {
 
         default: return -1;
     }
+}
+
+// ============================================================================
+// TEMPO / BPM FUNCTIONS
+// ============================================================================
+
+// Convert BPM to 8.8 fixed-point ticks_per_row
+// Formula: ticks_per_row = (60 Hz * 60 sec * 4 rows/beat) / BPM / 4 rows/beat
+//        = 3600 / BPM (in fixed point: * 256)
+uint16_t bpm_to_ticks_fp(uint8_t bpm) {
+    if (bpm < 60) bpm = 60;
+    if (bpm > 240) bpm = 240;
+    
+    // Use 32-bit math to avoid overflow: (3600 * 256) / bpm
+    uint32_t ticks = ((uint32_t)921600) / bpm;
+    return (uint16_t)ticks;
 }
 
 // ============================================================================
@@ -140,9 +157,9 @@ static void start_export(void) {
     cur_order_idx = 0;
     play_row = 0;
     seq.is_playing = true;
-    // Set to ticks_per_row so first sequencer_step() processes row 0 immediately
+    // Set to ticks_per_row_fp so first sequencer_step() processes row 0 immediately
     // (matches behavior of pressing Enter to start playback)
-    seq.tick_counter = seq.ticks_per_row;
+    seq.tick_counter_fp = seq.ticks_per_row_fp;
     
     // Clear all effect states
     for (int i = 0; i < 9; i++) {
@@ -456,10 +473,14 @@ void handle_navigation() {
 
 void sequencer_step(void) {
     if (!seq.is_playing) return;
-    seq.tick_counter++;
+    
+    // Increment by 1.0 tick in 8.8 fixed-point (256 = 1.0)
+    seq.tick_counter_fp += TICK_SCALE;
 
-    if (seq.tick_counter >= seq.ticks_per_row) {
-        seq.tick_counter = 0;
+    // Check if we've accumulated enough ticks for a new row
+    if (seq.tick_counter_fp >= seq.ticks_per_row_fp) {
+        // Subtract (preserving fractional remainder for smooth timing)
+        seq.tick_counter_fp -= seq.ticks_per_row_fp;
 
         for (uint8_t ch = 0; ch < 9; ch++) {
             if (ch == cur_channel && active_midi_note != 0) continue;
@@ -792,8 +813,9 @@ void sequencer_step(void) {
         process_gen_logic(ch);
     }
 
-    // If we just finished the last tick of the row (e.g., Tick 5 of 6)
-    if (seq.tick_counter == (seq.ticks_per_row - 1)) {
+    // If we just finished the last tick of the row
+    // Check if tick_counter_fp is >= (ticks_per_row_fp - TICK_SCALE)
+    if (seq.tick_counter_fp >= (seq.ticks_per_row_fp - TICK_SCALE)) {
         if (play_row < 31) {
             play_row++;
         } else {
@@ -842,7 +864,7 @@ void handle_transport_controls() {
             // Reset to beginning
             uint8_t old = cur_row;
             cur_row = 0;
-            seq.tick_counter = 0;
+            seq.tick_counter_fp = 0;
             play_row = 0;
             cur_order_idx = 0;
             
@@ -857,7 +879,7 @@ void handle_transport_controls() {
             seq.is_playing = !seq.is_playing;
             
             if (seq.is_playing) {
-                seq.tick_counter = seq.ticks_per_row; 
+                seq.tick_counter_fp = seq.ticks_per_row_fp; 
 
                 // --- THE FIX ---
                 if (is_song_mode) {

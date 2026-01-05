@@ -166,7 +166,8 @@ void process_portamento_logic(uint8_t ch) {
 
     // --- TICK 0 GUARD ---
     // Let the sequencer handle the initial note strike on Tick 0.
-    if (seq.tick_counter == 0) return;
+    // Check if tick_counter_fp is less than 1.0 (TICK_SCALE = 256)
+    if (seq.tick_counter_fp < TICK_SCALE) return;
 
     ch_porta[ch].tick_counter++;
 
@@ -334,7 +335,7 @@ void process_notecut_logic(uint8_t ch) {
 
 void process_notedelay_logic(uint8_t ch) {
     if (!ch_notedelay[ch].active) return;
-    if (seq.tick_counter == 0) return;
+    if (seq.tick_counter_fp < TICK_SCALE) return;
 
     ch_notedelay[ch].tick_counter++;
 
@@ -384,7 +385,7 @@ void process_tremolo_logic(uint8_t ch) {
 
     // --- TICK 0 GUARD ---
     // Let the sequencer handle the initial volume setting on Tick 0.
-    if (seq.tick_counter == 0) return;
+    if (seq.tick_counter_fp < TICK_SCALE) return;
 
     // 1. ADVANCE PHASE
     // Rate (R) now controls how much we add to the phase every frame.

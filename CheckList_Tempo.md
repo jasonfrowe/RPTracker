@@ -162,42 +162,43 @@ ticks_per_row_fp = ((60 * 60 * 4) / BPM) * 256
 
 ## Implementation Checklist
 
-### Phase 1: Data Structure Changes
-- [ ] Change `SequencerState.ticks_per_row` from `uint8_t` to `uint16_t` (8.8 fixed point)
-- [ ] Change `SequencerState.tick_counter` from `uint8_t` to `uint16_t` (8.8 fixed point)
-- [ ] Keep `SequencerState.bpm` as `uint8_t` (60-255 BPM range)
-- [ ] Add `#define TICK_SCALE 256` constant for readability
+### Phase 1: Data Structure Changes ✅ COMPLETED
+- [x] Change `SequencerState.ticks_per_row` from `uint8_t` to `uint16_t` (8.8 fixed point) → `ticks_per_row_fp`
+- [x] Change `SequencerState.tick_counter` from `uint8_t` to `uint16_t` (8.8 fixed point) → `tick_counter_fp`
+- [x] Keep `SequencerState.bpm` as `uint8_t` (60-255 BPM range)
+- [x] Add `#define TICK_SCALE 256` constant for readability
 
-### Phase 2: BPM Conversion Function
-- [ ] Create `uint16_t bpm_to_ticks_fp(uint8_t bpm)` function
-  - [ ] Formula: `((60 * 60 * 4) / bpm) * 256`
-  - [ ] Use 32-bit intermediate math to avoid overflow
-  - [ ] Return 8.8 fixed-point value
+### Phase 2: BPM Conversion Function ✅ COMPLETED
+- [x] Create `uint16_t bpm_to_ticks_fp(uint8_t bpm)` function
+  - [x] Formula: `((60 * 60 * 4) / bpm) * 256` = `921600 / bpm`
+  - [x] Use 32-bit intermediate math to avoid overflow
+  - [x] Return 8.8 fixed-point value
 - [ ] Create `uint8_t ticks_fp_to_bpm(uint16_t ticks_fp)` function (optional, for display)
 
-### Phase 3: Update Sequencer Logic
-- [ ] Update `sequencer_step()` to use fixed-point math
-  - [ ] Change: `tick_counter_fp += 256` (add 1.0 tick per frame)
-  - [ ] Change: `if (tick_counter_fp >= ticks_per_row_fp)`
-  - [ ] Change: `tick_counter_fp -= ticks_per_row_fp` (not = 0, preserve fractional part)
-- [ ] Update initialization in `start_export()`
-  - [ ] Change: `seq.tick_counter = seq.ticks_per_row_fp`
-- [ ] Update initialization in `handle_transport_controls()` (Enter key)
-  - [ ] Change: `seq.tick_counter = seq.ticks_per_row_fp`
-- [ ] Update Shift+Enter reset
-  - [ ] Change: `seq.tick_counter = 0` stays same (or could be 0x0000)
+### Phase 3: Update Sequencer Logic ✅ COMPLETED
+- [x] Update `sequencer_step()` to use fixed-point math
+  - [x] Change: `tick_counter_fp += TICK_SCALE` (add 1.0 tick per frame)
+  - [x] Change: `if (tick_counter_fp >= ticks_per_row_fp)`
+  - [x] Change: `tick_counter_fp -= ticks_per_row_fp` (preserve fractional part)
+- [x] Update initialization in `start_export()`
+  - [x] Change: `seq.tick_counter_fp = seq.ticks_per_row_fp`
+- [x] Update initialization in `handle_transport_controls()` (Enter key)
+  - [x] Change: `seq.tick_counter_fp = seq.ticks_per_row_fp`
+- [x] Update Shift+Enter reset
+  - [x] Change: `seq.tick_counter_fp = 0`
 
 ### Phase 4: UI Integration
-- [ ] Add BPM display to dashboard (Row 1 or Row 3)
-  - [ ] Currently commented: `// draw_string(61, 1, "BPM: 150  TKS: 00", ...)`
+- [ ] Add BPM display to dashboard (below "INS:" line)
   - [ ] Format: "BPM: XXX"
-  - [ ] Update in `update_dashboard()`
+  - [ ] Update in `update_dashboard()` in screen.c
 - [ ] Add keyboard controls for BPM change
-  - [ ] Suggestion: `Ctrl + Up/Down` for ±1 BPM
-  - [ ] Suggestion: `Ctrl + Shift + Up/Down` for ±10 BPM
+  - [ ] **F7**: Increase BPM by 1
+  - [ ] **Shift-F7**: Decrease BPM by 1
   - [ ] Clamp: 60-240 BPM reasonable range
 - [ ] Update BPM when changed
   - [ ] Recalculate `seq.ticks_per_row_fp = bpm_to_ticks_fp(seq.bpm)`
+  - [ ] Call from keyboard handler in player.c
+- [ ] Update help screen with new shortcuts (main.hlp)
 
 ### Phase 5: File Format Integration
 - [ ] Add BPM to song file format (.RPT)

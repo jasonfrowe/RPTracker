@@ -11,11 +11,14 @@
 #define is_ctrl_down()  (key(KEY_LEFTCTRL)  || key(KEY_RIGHTCTRL))
 #define is_alt_down()   (key(KEY_LEFTALT)   || key(KEY_RIGHTALT))
 
+// Fixed-point scale for tempo system (8.8 format: 8-bit integer, 8-bit fraction)
+#define TICK_SCALE 256
+
 typedef struct {
     bool is_playing;
-    uint8_t ticks_per_row; // Standard tracker speed (default 6)
-    uint8_t tick_counter;  // Counter to track sub-row timing
-    uint8_t bpm;           // Current BPM (logic uses 60Hz / ticks)
+    uint16_t ticks_per_row_fp; // 8.8 fixed-point ticks per row (was uint8_t ticks_per_row)
+    uint16_t tick_counter_fp;  // 8.8 fixed-point tick accumulator (was uint8_t tick_counter)
+    uint8_t bpm;               // Current BPM (60-240)
 } SequencerState;
 
 extern SequencerState seq;
