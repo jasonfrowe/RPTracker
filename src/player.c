@@ -503,6 +503,7 @@ void sequencer_step(void) {
         // Subtract (preserving fractional remainder for smooth timing)
         seq.tick_counter_fp -= seq.ticks_per_row_fp;
 
+
         for (uint8_t ch = 0; ch < 9; ch++) {
             if (ch == cur_channel && active_midi_note != 0) continue;
 
@@ -625,11 +626,15 @@ void sequencer_step(void) {
                 } else if (cmd == 5) {
                     // Note Cut: 5__T
                     // T = Ticks before cut (0-F maps to 0-15 ticks)
-                    uint8_t cut_tick = (eff & 0x0F);
-                    if (cut_tick == 0) cut_tick = 1; // Prevent instant cut
-                    
+                    uint8_t base_cut_ticks = (eff & 0x0F);
+                    if (base_cut_ticks == 0) base_cut_ticks = 1;
+
+                    // Scale: (base * ticks_per_row_fp) / 1536
+                    uint32_t scaled = ((uint32_t)base_cut_ticks * seq.ticks_per_row_fp) / 1536;
+                    ch_notecut[ch].cut_tick = (uint8_t)scaled;
+                    if (ch_notecut[ch].cut_tick == 0) ch_notecut[ch].cut_tick = 1;
+
                     ch_notecut[ch].active = true;
-                    ch_notecut[ch].cut_tick = cut_tick;
                     ch_notecut[ch].tick_counter = 0;
                 } else if (cmd == 6) {
                     // Automatic Echo: 6VDT
@@ -657,9 +662,8 @@ void sequencer_step(void) {
                     // The note in cell.note will play normally on Tick 0.
                 } else if (cmd == 7) {
                     // Retrigger: 7__T
-                    // T = Ticks between retriggers (0-F)
                     uint8_t speed = (eff & 0x0F);
-                    if (speed == 0) speed = 3; // Default speed
+                    if (speed == 0) speed = 3; // Default
                     
                     uint8_t note = (cell.note != 0 && cell.note != 255) ? cell.note : ch_arp[ch].base_note;
                     
@@ -667,8 +671,16 @@ void sequencer_step(void) {
                     ch_retrigger[ch].speed = speed;
                     ch_retrigger[ch].note = note;
                     ch_retrigger[ch].inst = (cell.note != 0 && cell.note != 255) ? cell.inst : ch_arp[ch].inst;
-                    ch_retrigger[ch].vol = (cell.note != 0 && cell.note != 255) ? cell.vol : ch_arp[ch].vol;
-                    ch_retrigger[ch].tick_counter = 0;
+                    ch_retrigger[ch].vol  = (cell.note != 0 && cell.note != 255) ? cell.vol : ch_arp[ch].vol;
+                    
+                    // --- THE FIX: SCALE TO TEMPO ---
+                    // At 150 BPM, one musical tick = 256 (TICK_SCALE).
+                    // Formula: (Current Row Duration in FP / 6) * speed
+                    uint32_t one_tick_fp = (seq.ticks_per_row_fp / 6);
+                    ch_retrigger[ch].target_fp = (uint16_t)(one_tick_fp * speed);
+                    
+                    ch_retrigger[ch].timer_fp = 0;
+                    ch_retrigger[ch].just_triggered = true; // Sync with sequencer strike
                 } else if (cmd == 8) {
                     // Tremolo: 8RDT
                     uint8_t rate = (eff >> 8) & 0x0F;
@@ -850,6 +862,7 @@ void sequencer_step(void) {
     // If we just finished the last tick of the row
     // Check if tick_counter_fp is >= (ticks_per_row_fp - TICK_SCALE)
     if (seq.tick_counter_fp >= (seq.ticks_per_row_fp - TICK_SCALE)) {
+    // if (is_new_row) {
         if (play_row < 31) {
             play_row++;
         } else {

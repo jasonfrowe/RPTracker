@@ -69,12 +69,14 @@ typedef struct {
 } NoteDelayState;
 
 typedef struct {
+    uint16_t timer_fp;    // Accumulator (8.8)
+    uint16_t target_fp;   // Threshold (8.8)
     uint8_t note;
     uint8_t inst;
     uint8_t vol;
-    uint8_t speed;        // Ticks between retriggers
-    uint8_t tick_counter;
+    uint8_t speed;        // T nibble
     bool    active;
+    bool    just_triggered; // Prevent Tick 0 double-hit
 } RetriggerState;
 
 typedef struct {

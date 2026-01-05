@@ -374,16 +374,27 @@ void process_notedelay_logic(uint8_t ch) {
 
 void process_retrigger_logic(uint8_t ch) {
     if (!ch_retrigger[ch].active) return;
-    
-    ch_retrigger[ch].tick_counter++;
-    
-    if (ch_retrigger[ch].tick_counter >= ch_retrigger[ch].speed) {
-        ch_retrigger[ch].tick_counter = 0;
+
+    // Tick 0 Guard: The sequencer just struck the note, 
+    // so we skip this frame and start counting.
+    if (ch_retrigger[ch].just_triggered) {
+        ch_retrigger[ch].just_triggered = false;
+        return;
+    }
+
+    // 1. Accumulate time (256 = 1 VSync frame)
+    ch_retrigger[ch].timer_fp += 256;
+
+    // 2. Check if we reached the tempo-scaled target
+    if (ch_retrigger[ch].timer_fp >= ch_retrigger[ch].target_fp) {
+        ch_retrigger[ch].timer_fp = 0;
         
+        // --- THE ACTION ---
         OPL_NoteOff(ch);
         OPL_SetPatch(ch, &gm_bank[ch_retrigger[ch].inst]);
-        OPL_SetVolume(ch, ch_retrigger[ch].vol << 1);
+        OPL_SetVolume(ch, ch_retrigger[ch].vol << 1); 
         OPL_NoteOn(ch, ch_retrigger[ch].note);
+        
         ch_peaks[ch] = ch_retrigger[ch].vol;
     }
 }
