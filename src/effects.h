@@ -92,7 +92,7 @@ typedef struct {
 
 typedef struct {
     uint8_t base_note;
-    int8_t  detune;       // Signed detune in 1/16 semitones
+    int8_t  detune;       // Signed detune in 1/32 semitones
     uint8_t inst;
     uint8_t vol;
     bool    active;

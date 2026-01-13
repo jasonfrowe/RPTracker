@@ -298,21 +298,39 @@ void OPL_Config(uint8_t enable, uint16_t addr) {
 void OPL_NoteOn_Detuned(uint8_t channel, uint8_t midi_note, int8_t detune) {
     if (channel > 8) return;
 
+    // Consistency with OPL_NoteOn: if drum, base pitch is fixed to Middle C
+    if (channel_is_drum[channel]) {
+        midi_note = 60; 
+    }
+
     uint16_t freq = midi_to_opl_freq(midi_note);
     uint16_t fnum = freq & 0x3FF; 
     uint8_t block = (freq >> 10) & 0x07; 
 
-    // --- THE ADJUSTMENT ---
-    // Multiplier of 2:
-    // Max Detune 7: +14 F-Num units (approx 2/3rds of a semitone)
-    // Min Detune 8: -16 F-Num units (approx 3/4ths of a semitone)
-    int16_t adjusted_fnum = (int16_t)fnum + (detune * 1);
+    // Convert to linear frequency scalar (Fnum * 2^Block)
+    // capable of representing the full frequency range
+    uint32_t v = (uint32_t)fnum << block;
 
-    if (adjusted_fnum < 1) adjusted_fnum = 1;
-    if (adjusted_fnum > 1023) adjusted_fnum = 1023;
+    // Apply detune (1/32 semitone steps)
+    // Formula approximation: v_new = v * (1 + detune/384 * ln(2))
+    // constant 554 ~= 384 / ln(2)
+    int32_t delta = ((int32_t)v * detune) / 554;
+    int32_t v_new = (int32_t)v + delta;
 
-    OPL_Write(0xA0 + channel, adjusted_fnum & 0xFF);
-    uint8_t b_val = 0x20 | (block << 2) | ((adjusted_fnum >> 8) & 0x03);
+    if (v_new < 1) v_new = 1;
+
+    // Re-encode into optimal Block/F-Num to maximize precision
+    // We find the lowest block that allows the F-Num to fit in 10 bits
+    uint8_t new_block = 0;
+    while ((v_new >> new_block) > 1023 && new_block < 7) {
+        new_block++;
+    }
+
+    uint16_t new_fnum = (uint16_t)(v_new >> new_block);
+    if (new_fnum > 1023) new_fnum = 1023; // Clamp at physical max
+
+    OPL_Write(0xA0 + channel, new_fnum & 0xFF);
+    uint8_t b_val = 0x20 | (new_block << 2) | ((new_fnum >> 8) & 0x03);
     OPL_Write(0xB0 + channel, b_val);
     
     shadow_b0[channel] = b_val & 0x1F;

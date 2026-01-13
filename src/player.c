@@ -721,9 +721,10 @@ void sequencer_step(void) {
                         ch_tremolo[ch].phase = 0;
                     }
                 } else if (cmd == 9) {
-                    // Fine Pitch: 9__D
-                    uint8_t detune_raw = (eff & 0x0F);
-                    int8_t detune = (detune_raw < 8) ? (int8_t)detune_raw : (int8_t)detune_raw - 16;
+                    // Fine Pitch: 9_DD (8-bit signed)
+                    // Interprets the lower 8 bits as a signed value (-128 to 127)
+                    // representing steps of 1/32 semitone.
+                    int8_t detune = (int8_t)(eff & 0xFF);
                     
                     // Deciding the note to play:
                     uint8_t note = (cell.note != 0 && cell.note != 255) ? cell.note : ch_arp[ch].base_note;

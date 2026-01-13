@@ -343,27 +343,32 @@ Tremolo adds volume oscillation to sustained notes, creating rhythmic pulsing an
 
 ---
 
-### 🎛️ Effect Command 9: Fine Pitch (9__D)
+### 🎛️ Effect Command 9: Fine Pitch (9_XX)
 Fine Pitch applies subtle pitch adjustments for microtuning, chorus effects, and detuning.
-Adds richness and width to sounds without full semitone shifts.
+This command uses an **8-bit signed value** to represent the detune amount in **1/32 semitone** steps.
 
-**Format: `9 _ _ D`**
+**Format: `9 X X` (Hex)**
 
 *   **9**: Command ID (Fine Pitch).
-*   **D (Detune)**: Pitch adjustment in 1/16 semitone steps (0-F):
-    *   `0-7`: Detune UP by 0-7 sixteenths of a semitone
-    *   `8-F`: Detune DOWN by 8-1 sixteenths of a semitone
-        *   `8` = -8/16 (half semitone down)
-        *   `9` = -7/16
-        *   `A` = -6/16
-        *   ...
-        *   `F` = -1/16 (very subtle down)
+*   **XX (Detune Amount)**: Signed 8-bit value (-128 to +127).
+    *   **Rate**: Each step is **1/32 of a semitone** (approx 3 cents).
+    *   **Positive Values (01 to 7F)**: Pitch Up.
+        *   `01` = +1/32 semitone (very subtle).
+        *   `08` = +1/4 semitone.
+        *   `10` = +1/2 semitone.
+        *   `20` = +1 semitone.
+    *   **Negative Values (FF down to 80)**: Pitch Down.
+        *   `FF` (-1)  = -1/32 semitone.
+        *   `F0` (-16) = -1/2 semitone.
+        *   `E0` (-32) = -1 semitone.
+        *   `80` (-128) = -4 semitones (Max downward detune).
 
 **Usage:**
-- `9002`: Slight upward detune (chorus effect).
-- `900E`: Slight downward detune (chorus effect on second channel).
-- `9004`: Medium upward detune (layer with undetuned note for width).
-- `9008`: Half semitone down (between notes).
+- `9002`: Very slight upward detune (Chorus effect).
+- `90FE`: Very slight downward detune (-2/32).
+- `9010`: Up 1/2 semitone.
+- `90F0`: Down 1/2 semitone.
+- `9080`: Hard drop (Down 4 semitones).
 
 **Notes:**
 - Fine pitch is applied once on note trigger (not continuous).
