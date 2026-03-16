@@ -173,7 +173,6 @@ static void start_export(void) {
     cur_order_idx = 0;
     play_row = 0;
     seq.is_playing = true;
-    active_midi_note = 0;
     // Set to ticks_per_row_fp so first sequencer_step() processes row 0 immediately
     // (matches behavior of pressing Enter to start playback)
     seq.tick_counter_fp = seq.ticks_per_row_fp;
@@ -211,18 +210,20 @@ static void finish_export(void) {
     
     // Flush remaining data
     flush_export_buffer();
-
-    // Keep file aligned to 512-byte sectors for fixed-size streaming readers.
-    uint16_t remainder = export_total_bytes % 512;ls
+    
+    // Pad to 512-byte boundary
+    uint16_t remainder = export_total_bytes % 512;
     if (remainder != 0) {
         uint16_t padding = 512 - remainder;
-
+        
+        // Fill buffer with zeros
         RIA.addr0 = EXPORT_BUF_XRAM;
         RIA.step0 = 1;
         for (uint16_t i = 0; i < padding; i++) {
             RIA.rw0 = 0x00;
         }
-
+        
+        // Write padding
         write_xram(EXPORT_BUF_XRAM, padding, export_fd);
         export_total_bytes += padding;
     }
@@ -246,6 +247,9 @@ static void export_loop(void) {
     
     // Run sequencer until song ends
     while (is_exporting) {
+        // Increment delay counter each frame
+        accumulated_delay++;
+        
         // Run sequencer step
         sequencer_step();
         
@@ -271,9 +275,6 @@ static void export_loop(void) {
             finish_export();
             break;
         }
-
-        // Increment delay after sequencing so first events start at 0 delay.
-        accumulated_delay++;
     }
 }
 

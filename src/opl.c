@@ -71,7 +71,10 @@ uint16_t midi_to_opl_freq(uint8_t midi_note) {
 }
 
 void OPL_Write(uint8_t reg, uint8_t data) {
-    bool bypass_shadow = false;
+    // During export, always write note on/off commands (0xB0-0xB8)
+    // to ensure proper timing even if shadow thinks it's redundant
+    bool is_note_onoff_reg = (reg >= 0xB0 && reg <= 0xB8);
+    bool bypass_shadow = is_exporting && is_note_onoff_reg;
     
     // Check if the hardware already has this value
     if (!bypass_shadow && opl_hardware_shadow[reg] == data) {
@@ -169,9 +172,7 @@ void OPL_SetPitch_Fine(uint8_t channel, uint8_t midi_note, int8_t fine_offset) {
     uint8_t b_val = 0x20 | (block << 2) | ((adjusted_fnum >> 8) & 0x03);
     OPL_Write(0xB0 + channel, b_val);
     
-    // Preserve full B0 shadow (including key-on bit) so later pitch updates
-    // do not accidentally clear sustain.
-    shadow_b0[channel] = b_val;
+    shadow_b0[channel] = b_val & 0x1F;
 }
 
 void OPL_SetPitch(uint8_t channel, uint8_t midi_note) {
@@ -332,8 +333,7 @@ void OPL_NoteOn_Detuned(uint8_t channel, uint8_t midi_note, int8_t detune) {
     uint8_t b_val = 0x20 | (new_block << 2) | ((new_fnum >> 8) & 0x03);
     OPL_Write(0xB0 + channel, b_val);
     
-    // Preserve full B0 shadow (including key-on bit) for stable pitch updates.
-    shadow_b0[channel] = b_val;
+    shadow_b0[channel] = b_val & 0x1F;
 }
 
 void OPL_Write_Force(uint8_t reg, uint8_t data) {
