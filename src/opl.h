@@ -23,6 +23,9 @@ extern bool is_exporting;
 extern uint16_t export_idx;
 extern uint16_t accumulated_delay;
 
+extern void OPL_ExportFlushPending(void);
+extern void OPL_ExportResetPending(void);
+
 extern const uint16_t fnum_table[12];
 
 extern uint16_t current_event_idx;

@@ -30,6 +30,34 @@ bool is_exporting = false;
 uint16_t export_idx = 0;       // Current offset in the XRAM buffer
 uint16_t accumulated_delay = 0; // Ticks since the last captured command
 
+static bool export_pending_valid = false;
+static uint8_t export_pending_reg = 0;
+static uint8_t export_pending_val = 0;
+
+void OPL_ExportResetPending(void) {
+    export_pending_valid = false;
+    export_pending_reg = 0;
+    export_pending_val = 0;
+}
+
+void OPL_ExportFlushPending(void) {
+    if (export_pending_valid) {
+        // Point RIA to our staging buffer in XRAM
+        RIA.addr0 = EXPORT_BUF_XRAM + export_idx;
+        RIA.step0 = 1;
+
+        // Write the 4-byte packet: [Reg, Val, DelayLo, DelayHi]
+        RIA.rw0 = export_pending_reg;
+        RIA.rw0 = export_pending_val;
+        RIA.rw0 = (uint8_t)(accumulated_delay & 0xFF);
+        RIA.rw0 = (uint8_t)(accumulated_delay >> 8);
+
+        export_idx += 4;
+        export_pending_valid = false;
+    }
+    accumulated_delay = 0;
+}
+
 uint8_t channel_is_drum[9] = {0,0,0,0,0,0,0,0,0}; 
 
 // Full shadow of the OPL2's 256 registers
@@ -92,19 +120,26 @@ void OPL_Write(uint8_t reg, uint8_t data) {
             // but prevent corruption
             return;
         }
-        
-        // Point RIA to our staging buffer in XRAM
-        RIA.addr0 = EXPORT_BUF_XRAM + export_idx;
-        RIA.step0 = 1;
 
-        // Write the 4-byte packet: [Reg, Val, DelayLo, DelayHi]
-        RIA.rw0 = reg;
-        RIA.rw0 = data;
-        RIA.rw0 = (uint8_t)(accumulated_delay & 0xFF);
-        RIA.rw0 = (uint8_t)(accumulated_delay >> 8);
+        if (export_pending_valid) {
+            // Point RIA to our staging buffer in XRAM
+            RIA.addr0 = EXPORT_BUF_XRAM + export_idx;
+            RIA.step0 = 1;
 
-        export_idx += 4;
+            // Write the pending 4-byte packet: [Reg, Val, DelayLo, DelayHi]
+            RIA.rw0 = export_pending_reg;
+            RIA.rw0 = export_pending_val;
+            RIA.rw0 = (uint8_t)(accumulated_delay & 0xFF);
+            RIA.rw0 = (uint8_t)(accumulated_delay >> 8);
+
+            export_idx += 4;
+        }
         
+        // Save the new packet as pending
+        export_pending_reg = reg;
+        export_pending_val = data;
+        export_pending_valid = true;
+
         // Reset delay: subsequent commands on this same tick will have 0 delay
         accumulated_delay = 0; 
         

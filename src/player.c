@@ -148,7 +148,17 @@ static void derive_export_filename(void) {
 static void start_export(void) {
     printf("Starting export...\n");
 
-    OPL_Init(); // Reset OPL state
+    // Initialize export state FIRST so OPL_Init is captured
+    is_exporting = true;
+    export_idx = 0;
+    accumulated_delay = 0;
+    export_total_bytes = 0;
+    export_song_ended = false;
+
+    // Reset pending export packet logic
+    OPL_ExportResetPending();
+
+    OPL_Init(); // Reset OPL state and capture it to the file
     
     // Derive filename
     derive_export_filename();
@@ -160,13 +170,6 @@ static void start_export(void) {
         printf("Error: Cannot create export file\n");
         return;
     }
-    
-    // Initialize export state
-    is_exporting = true;
-    export_idx = 0;
-    accumulated_delay = 0;
-    export_total_bytes = 0;
-    export_song_ended = false;
     
     // Force song mode and reset to beginning
     is_song_mode = true;
@@ -199,7 +202,17 @@ static void start_export(void) {
 }
 
 static void finish_export(void) {
+    // 1. Wipe the OPL2 registers so hanging notes don't bleed into the loop
+    OPL_Clear();
+    
+    // Flush the very last pending packet emitted by OPL_Clear
+    OPL_ExportFlushPending();
+    
     // Write end marker: 0xFF, 0xFF, 0x00, 0x00
+    if (export_idx >= (EXPORT_CHUNK - 4)) {
+        flush_export_buffer();
+    }
+    
     RIA.addr0 = EXPORT_BUF_XRAM + export_idx;
     RIA.step0 = 1;
     RIA.rw0 = 0xFF;
@@ -216,11 +229,15 @@ static void finish_export(void) {
     if (remainder != 0) {
         uint16_t padding = 512 - remainder;
         
-        // Fill buffer with zeros
+        // Fill buffer with end markers
+        uint16_t pad_repeats = padding / 4;
         RIA.addr0 = EXPORT_BUF_XRAM;
         RIA.step0 = 1;
-        for (uint16_t i = 0; i < padding; i++) {
-            RIA.rw0 = 0x00;
+        for (uint16_t i = 0; i < pad_repeats; i++) {
+            RIA.rw0 = 0xFF; // Reg
+            RIA.rw0 = 0xFF; // Val
+            RIA.rw0 = 0x00; // Delay Lo
+            RIA.rw0 = 0x00; // Delay Hi
         }
         
         // Write padding
@@ -240,6 +257,21 @@ static void finish_export(void) {
     printf("File: %s\n", export_filename);
 }
 
+static void process_per_frame_effects(void) {
+    for (uint8_t ch = 0; ch < 9; ch++) {
+        process_arp_logic(ch);
+        process_portamento_logic(ch);
+        process_volume_slide_logic(ch);
+        process_vibrato_logic(ch);
+        process_notecut_logic(ch);
+        process_notedelay_logic(ch);
+        process_retrigger_logic(ch);
+        process_tremolo_logic(ch);
+        process_finepitch_logic(ch);
+        process_gen_logic(ch);
+    }
+}
+
 static void export_loop(void) {
     // Track starting order to detect loop
     uint8_t start_order = cur_order_idx;
@@ -252,6 +284,14 @@ static void export_loop(void) {
         
         // Run sequencer step
         sequencer_step();
+        
+        // 1. Process Per-Frame Effects (Vibrato, Pitch Bends, Arpeggio, etc.)
+        // This is crucial for properly packing the .BIN file with the pitch
+        // envelopes and sliding commands needed for instruments like Bass.
+        // It also forces the correct rhythmic pacing so the OPL2 has >23us 
+        // to breathe between back-to-back NoteOff -> NoteOn commands.
+        process_per_frame_effects();
+        
         
         // Check if buffer is getting full (leave room for end marker)
         if (export_idx >= (EXPORT_CHUNK - 8)) {
@@ -866,18 +906,7 @@ void sequencer_step(void) {
     }
 
     // --- PHASE B: PER-VSYNC TICK ---
-    for (uint8_t ch = 0; ch < 9; ch++) {
-        process_arp_logic(ch);
-        process_portamento_logic(ch);
-        process_volume_slide_logic(ch);
-        process_vibrato_logic(ch);
-        process_notecut_logic(ch);
-        process_notedelay_logic(ch);
-        process_retrigger_logic(ch);
-        process_tremolo_logic(ch);
-        process_finepitch_logic(ch);
-        process_gen_logic(ch);
-    }
+    process_per_frame_effects();
 
     // If we just finished the last tick of the row
     // Check if tick_counter_fp is >= (ticks_per_row_fp - TICK_SCALE)
