@@ -282,16 +282,9 @@ static void export_loop(void) {
         // Increment delay counter each frame
         accumulated_delay++;
         
-        // Run sequencer step
+        // Run sequencer step — this already runs all per-frame effects in Phase B
+        // (arp, portamento, vibrato, notecut, etc.), exactly as live playback does.
         sequencer_step();
-        
-        // 1. Process Per-Frame Effects (Vibrato, Pitch Bends, Arpeggio, etc.)
-        // This is crucial for properly packing the .BIN file with the pitch
-        // envelopes and sliding commands needed for instruments like Bass.
-        // It also forces the correct rhythmic pacing so the OPL2 has >23us 
-        // to breathe between back-to-back NoteOff -> NoteOn commands.
-        process_per_frame_effects();
-        
         
         // Check if buffer is getting full (leave room for end marker)
         if (export_idx >= (EXPORT_CHUNK - 8)) {
