@@ -4,9 +4,10 @@
 #include <unistd.h>
 #include <stdio.h>
 
-// MIDI note entry from a USB MIDI keyboard on MIDI0:.
-// The device delivers SMF-style events: a variable length delta time
-// (ignored here) before each raw MIDI message.
+// MIDI note entry from a USB MIDI keyboard on MIDI0: in RAW mode.
+// The device delivers plain wire MIDI bytes: channel voice messages
+// (with running status), system common, single-byte real-time messages
+// that may appear anywhere, and System Exclusive. There are no delta times.
 
 #define MIDI_DEBUG 0
 
@@ -21,17 +22,15 @@ static bool midi_off_pending = false;
 static int midi_fd = -1;
 static uint8_t midi_retry = MIDI_RETRY_FRAMES;
 
-// Stream parser state
-enum {
-    ST_DELTA,
-    ST_STATUS,
-    ST_DATA,
-    ST_SYSEX,
-};
-static uint8_t midi_state = ST_DELTA;
-static uint8_t midi_msg[3];
-static uint8_t midi_msg_len;
-static uint8_t midi_msg_need;
+// Wire MIDI parser state. Persists across midi_task() calls so a message
+// split across reads/frames resumes correctly.
+// midi_status: current status byte for running status (0 = none).
+//              The sentinel 0xF0 means "inside a System Exclusive".
+// midi_data:   data bytes collected for the current message.
+// midi_have:   number of data bytes collected so far.
+static uint8_t midi_status = 0;
+static uint8_t midi_data[2];
+static uint8_t midi_have = 0;
 
 /**
  * Data byte count for a status byte
@@ -61,22 +60,25 @@ static uint8_t midi_data_len(uint8_t status)
  */
 static void midi_handle_message(void)
 {
-    uint8_t kind = midi_msg[0] & 0xF0;
-    if (kind == 0x90 && midi_msg[2]) {
-        if (midi_msg[1]) {
+    uint8_t kind = midi_status & 0xF0;
+    if (kind == 0x90 && midi_data[1]) {
+        // Note On: velocity > 0. Note number 0 is the "none" sentinel
+        // and is ignored.
+        if (midi_data[0]) {
 #if MIDI_DEBUG
-            printf("[on %02X %02X]", midi_msg[1], midi_msg[2]);
+            printf("[on %02X %02X]", midi_data[0], midi_data[1]);
 #endif
-            midi_note = midi_msg[1];
-            midi_vel = midi_msg[2];
+            midi_note = midi_data[0];
+            midi_vel = midi_data[1];
             midi_fresh = true;
             midi_off_pending = false;
         }
     } else if (kind == 0x80 || kind == 0x90) {
+        // Note Off: 0x80, or 0x90 with velocity 0.
 #if MIDI_DEBUG
-        printf("[off %02X]", midi_msg[1]);
+        printf("[off %02X]", midi_data[0]);
 #endif
-        if (midi_msg[1] == midi_note) {
+        if (midi_data[0] == midi_note) {
             // A note struck and released within one frame still
             // sounds and records, the release applies next frame
             if (midi_fresh)
@@ -88,39 +90,43 @@ static void midi_handle_message(void)
 }
 
 /**
- * Parse one byte of the delta-timed event stream
+ * Parse one byte of the raw wire MIDI stream
  */
 static void midi_parse_byte(uint8_t b)
 {
-    switch (midi_state) {
-        case ST_DELTA:
-            // Delta time ends at the first byte with the high bit clear
-            if (!(b & 0x80))
-                midi_state = ST_STATUS;
-            break;
-        case ST_STATUS:
-            if (b >= 0xF8)
-                midi_state = ST_DELTA; // real-time, one byte
-            else if (b == 0xF0)
-                midi_state = ST_SYSEX;
-            else if (b >= 0x80) {
-                midi_msg[0] = b;
-                midi_msg_len = 1;
-                midi_msg_need = midi_data_len(b);
-                midi_state = midi_msg_need ? ST_DATA : ST_DELTA;
-            }
-            break;
-        case ST_DATA:
-            midi_msg[midi_msg_len++] = b;
-            if (!--midi_msg_need) {
-                midi_handle_message();
-                midi_state = ST_DELTA;
-            }
-            break;
-        case ST_SYSEX:
-            if (b == 0xF7)
-                midi_state = ST_DELTA;
-            break;
+    if (b >= 0xF8)
+        return; // system real-time: single byte, leaves all state untouched
+
+    if (b & 0x80) {
+        // Status byte (0x80-0xF7).
+        if (b == 0xF0) {
+            // System Exclusive begins; swallow data until any status byte.
+            midi_status = 0xF0;
+        } else if (b >= 0xF1) {
+            // System common (incl. 0xF7 EOX and undefined 0xF4/0xF5):
+            // cancels running status. Arm only if it carries data bytes,
+            // otherwise clear immediately so it cannot eat a later data byte.
+            midi_status = midi_data_len(b) ? b : 0;
+        } else {
+            // Channel voice: arm running status.
+            midi_status = b;
+        }
+        midi_have = 0;
+        return;
+    }
+
+    // Data byte (0x00-0x7F).
+    if (midi_status == 0xF0 || midi_status == 0)
+        return; // inside SysEx, or no status armed: ignore
+
+    midi_data[midi_have++] = b;
+    if (midi_have >= midi_data_len(midi_status)) {
+        if (midi_status < 0xF0) {
+            midi_handle_message();
+            midi_have = 0;   // keep running status armed for the next message
+        } else {
+            midi_status = 0; // system common does not run on
+        }
     }
 }
 
@@ -145,7 +151,8 @@ void midi_task(void)
         midi_fd = open(MIDI_DEVICE, O_RDONLY);
         if (midi_fd < 0)
             return;
-        midi_state = ST_DELTA;
+        midi_status = 0;
+        midi_have = 0;
 #if MIDI_DEBUG
         printf("[midi open]\n");
 #endif
@@ -161,6 +168,8 @@ void midi_task(void)
         midi_retry = 0;
         midi_note = 0;
         midi_off_pending = false;
+        midi_status = 0;
+        midi_have = 0;
         return;
     }
 #if MIDI_DEBUG
