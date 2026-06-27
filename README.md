@@ -55,6 +55,31 @@ These keys adjust the settings used when recording **new** notes.
 *   **Ctrl + S**: **Save Song.** Opens a dialog to save the song to USB as an `.RPT` (v2) file.
 *   **Ctrl + O**: **Load Song.** Opens a dialog to load an `.RPT` file from USB.
 
+
+## 🎛 MIDI Support
+
+RPTracker features USB MIDI keyboard input integration (e.g. Arturia MiniLab 3). Connect your keyboard to the Picocomputer via USB to play and record.
+
+### 1. MIDI Playback Modes
+* **Channel-Mapped Mode (Default):** MIDI Channels 1–9 (`chan` 0–8) play directly on their corresponding tracker channels 0–8. This allows multitembral OPL playback and recording. Higher MIDI channels fallback to the active grid column.
+* **Polyphonic Mode:** Spread notes across multiple tracker channels dynamically.
+  * Toggle with **Ctrl + P**. Visual status is shown on the dashboard (`MIDI POLY: ON/OFF`).
+  * In Polyphonic mode, new note-ons are allocated to free OPL channels.
+  * **Chord Recording:** In record (`edit`) mode, you can play a chord, and notes are entered on the same row across different columns. The playhead row only advances to the next step when you release all keys of the chord (MIDI held note count drops to 0).
+
+### 2. Control Change (CC) Knob & Pad Assignments
+The knobs and transport pads on your MIDI keyboard map to the following tracker parameters (values updated instantly on the UI):
+
+| Control | MIDI CC | Action / Parameter Mapping | Range |
+| --- | --- | --- | --- |
+| **Encoder 1** | CC 74 | **Instrument Select** | `00` - `7F` (128 patches) |
+| **Encoder 2** | CC 71 | **Volume Select** | `00` - `3F` (0 - 63) |
+| **Encoder 3** | CC 76 | **Tempo / BPM Adjust** | `60` - `240` BPM |
+| **Encoder 4** | CC 77 | **Octave Select** | `0` - `8` |
+| **Play Pad** | CC 115 or 93 | **Start / Pause Playback** | Value > 0 triggers |
+| **Stop Pad** | CC 116 or 94 | **Stop / Reset Playback** | Value > 0 stops & silences OPL |
+| **Record Pad** | CC 117 or 95 | **Toggle Record / Edit Mode** | Value > 0 toggles |
+
 ---
 
 ## 🛠 Effect Mode (Toggle with '/')
