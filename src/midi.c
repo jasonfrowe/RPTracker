@@ -14,9 +14,6 @@
 #define MIDI_DEVICE "MIDI0:"
 #define MIDI_RETRY_FRAMES 60 // retry open once per second at 60 fps
 
-uint8_t midi_note = 0;
-uint8_t midi_vel = 0;
-bool midi_fresh = false;
 static bool midi_off_pending = false;
 
 static int midi_fd = -1;
@@ -61,6 +58,7 @@ static uint8_t midi_data_len(uint8_t status)
 static void midi_handle_message(void)
 {
     uint8_t kind = midi_status & 0xF0;
+    uint8_t chan = midi_status & 0x0F;
     if (kind == 0x90 && midi_data[1]) {
         // Note On: velocity > 0. Note number 0 is the "none" sentinel
         // and is ignored.
@@ -68,24 +66,20 @@ static void midi_handle_message(void)
 #if MIDI_DEBUG
             printf("[on %02X %02X]", midi_data[0], midi_data[1]);
 #endif
-            midi_note = midi_data[0];
-            midi_vel = midi_data[1];
-            midi_fresh = true;
-            midi_off_pending = false;
+            midi_process_note_on(chan, midi_data[0], midi_data[1]);
         }
     } else if (kind == 0x80 || kind == 0x90) {
         // Note Off: 0x80, or 0x90 with velocity 0.
 #if MIDI_DEBUG
         printf("[off %02X]", midi_data[0]);
 #endif
-        if (midi_data[0] == midi_note) {
-            // A note struck and released within one frame still
-            // sounds and records, the release applies next frame
-            if (midi_fresh)
-                midi_off_pending = true;
-            else
-                midi_note = 0;
-        }
+        midi_process_note_off(chan, midi_data[0]);
+    } else if (kind == 0xB0) {
+        // CC Change
+#if MIDI_DEBUG
+        printf("[cc %02X %02X]", midi_data[0], midi_data[1]);
+#endif
+        midi_process_cc(chan, midi_data[0], midi_data[1]);
     }
 }
 
@@ -138,12 +132,6 @@ void midi_task(void)
     uint8_t buf[32];
     int n;
 
-    midi_fresh = false;
-    if (midi_off_pending) {
-        midi_off_pending = false;
-        midi_note = 0;
-    }
-
     if (midi_fd < 0) {
         if (++midi_retry < MIDI_RETRY_FRAMES)
             return;
@@ -166,8 +154,6 @@ void midi_task(void)
         close(midi_fd);
         midi_fd = -1;
         midi_retry = 0;
-        midi_note = 0;
-        midi_off_pending = false;
         midi_status = 0;
         midi_have = 0;
         return;

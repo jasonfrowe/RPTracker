@@ -57,5 +57,7 @@ extern void update_lfo_scaler(void);
 
 extern uint16_t get_pattern_xram_addr(uint8_t pat, uint8_t row, uint8_t chan);
 extern uint8_t active_midi_note;
+extern bool midi_polyphonic;
+extern uint8_t active_midi_notes[9];
 
 #endif

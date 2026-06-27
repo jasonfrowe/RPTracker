@@ -8,14 +8,10 @@
 // MIDI INPUT SUPPORT
 // ============================================================================
 
-// Currently held MIDI note (0 = none)
-extern uint8_t midi_note;
-
-// Velocity of the held note (1-127)
-extern uint8_t midi_vel;
-
-// A note on arrived this frame, retrigger even if the note is unchanged
-extern bool midi_fresh;
+// Event-driven MIDI callbacks (implemented in player.c)
+void midi_process_note_on(uint8_t chan, uint8_t note, uint8_t velocity);
+void midi_process_note_off(uint8_t chan, uint8_t note);
+void midi_process_cc(uint8_t chan, uint8_t cc_num, uint8_t cc_val);
 
 // Poll MIDI input, called once per frame
 void midi_task(void);

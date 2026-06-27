@@ -39,6 +39,10 @@ uint8_t current_octave = 3; // Adjusts in jumps of 12
 uint8_t active_midi_note = 0;      // Tracks the currently playing note
 uint8_t current_volume = 63; // Max volume (0x3F)
 
+bool midi_polyphonic = false;
+uint8_t active_midi_notes[9] = {0};
+static uint8_t midi_held_count = 0;
+
 // Export State (additional to those in opl.c)
 static char export_filename[16] = {0};
 static int export_fd = -1;
@@ -328,6 +332,10 @@ void player_tick(void) {
         if (key_pressed(KEY_V)) {
             pattern_paste(cur_pattern);
         }
+        if (key_pressed(KEY_P)) {
+            midi_polyphonic = !midi_polyphonic;
+            update_dashboard();
+        }
         if (key_pressed(KEY_E)) {
             // Start binary export
             start_export();
@@ -357,21 +365,10 @@ void player_tick(void) {
         }
     }
 
-    // MIDI input plays like piano keys, but with absolute note
-    // numbers and its own velocity
-    if (!note_pressed_this_frame && midi_note) {
-        target_note = midi_note;
-        live_volume = midi_vel >> 1;
-        if (!live_volume)
-            live_volume = 1;
-        note_pressed_this_frame = true;
-        ch_arp[channel].active = false;
-        ch_vibrato[channel].active = false;
-    }
 
     // 2. Logic: Note On & Recording
     if (note_pressed_this_frame) {
-        if (target_note != active_midi_note || midi_fresh) {
+        if (target_note != active_midi_note) {
             // Live Overdrive: Cut the sequencer's note and play the keyboard note
             OPL_NoteOff(channel);
             // ch_peaks[channel] = 0; // Clear peak
@@ -568,7 +565,7 @@ void sequencer_step(void) {
 
 
         for (uint8_t ch = 0; ch < 9; ch++) {
-            if (ch == cur_channel && active_midi_note != 0) continue;
+            if ((ch == cur_channel && active_midi_note != 0) || active_midi_notes[ch] != 0) continue;
 
             PatternCell cell;
             read_cell(cur_pattern, play_row, ch, &cell);
@@ -950,6 +947,8 @@ void handle_transport_controls() {
                 OPL_NoteOff(i);
                 // ch_peaks[i] = 0; // Clear peak
             }
+            memset(active_midi_notes, 0, sizeof(active_midi_notes));
+            midi_held_count = 0;
             
             for (int i=0; i<9; i++) {
                 last_effect[i] = 0xFFFF;
@@ -1385,4 +1384,194 @@ void modify_effect(int8_t delta) {
 
     write_cell(cur_pattern, cur_row, cur_channel, &cell);
     render_row(cur_row);
+}
+
+void midi_process_note_on(uint8_t chan, uint8_t note, uint8_t velocity) {
+    uint8_t target_ch;
+    uint8_t live_vol = velocity >> 1;
+    if (!live_vol) live_vol = 1;
+
+    if (midi_polyphonic) {
+        // Find a free channel
+        int8_t free_ch = -1;
+        for (int8_t i = 0; i < 9; i++) {
+            if (active_midi_notes[i] == 0) {
+                free_ch = i;
+                break;
+            }
+        }
+        // Round-robin steal if none free
+        if (free_ch == -1) {
+            static uint8_t rr_ptr = 0;
+            free_ch = rr_ptr;
+            rr_ptr = (rr_ptr + 1) % 9;
+            OPL_NoteOff(free_ch);
+        }
+        target_ch = free_ch;
+    } else {
+        // Channel-mapped mode
+        if (chan < 9) {
+            target_ch = chan;
+        } else {
+            target_ch = cur_channel;
+        }
+        OPL_NoteOff(target_ch);
+    }
+
+    ch_arp[target_ch].active = false;
+    ch_vibrato[target_ch].active = false;
+    OPL_SetPatch(target_ch, &gm_bank[current_instrument]);
+    OPL_SetVolume(target_ch, live_vol << 1);
+    OPL_NoteOn(target_ch, note);
+    ch_peaks[target_ch] = live_vol;
+    
+    if (active_midi_notes[target_ch] != 0) {
+        if (midi_held_count > 0) midi_held_count--;
+    }
+    active_midi_notes[target_ch] = note;
+    midi_held_count++;
+
+    // Record if edit mode is active and sequencer is stopped
+    if (edit_mode && !seq.is_playing) {
+        PatternCell c;
+        read_cell(cur_pattern, cur_row, target_ch, &c);
+        c.note = note;
+        c.inst = current_instrument;
+        c.vol = live_vol;
+        write_cell(cur_pattern, cur_row, target_ch, &c);
+        render_row(cur_row);
+
+        // Monophonic mode advances immediately on key press
+        if (!midi_polyphonic) {
+            if (cur_row < 31) {
+                cur_row++;
+            } else {
+                cur_row = 0;
+            }
+        }
+    }
+}
+
+void midi_process_note_off(uint8_t chan, uint8_t note) {
+    bool found = false;
+    uint8_t target_ch = 0;
+    if (midi_polyphonic) {
+        // Find channel playing this note
+        for (uint8_t ch = 0; ch < 9; ch++) {
+            if (active_midi_notes[ch] == note) {
+                target_ch = ch;
+                if (!seq.is_playing) {
+                    OPL_NoteOff(target_ch);
+                }
+                active_midi_notes[target_ch] = 0;
+                found = true;
+                break;
+            }
+        }
+    } else {
+        // Channel-mapped mode
+        target_ch = (chan < 9) ? chan : cur_channel;
+        if (active_midi_notes[target_ch] == note) {
+            if (!seq.is_playing) {
+                OPL_NoteOff(target_ch);
+            }
+            active_midi_notes[target_ch] = 0;
+            found = true;
+        }
+    }
+
+    if (found) {
+        if (midi_held_count > 0) {
+            midi_held_count--;
+        }
+
+        // Chords advance row when all keys are released
+        if (midi_polyphonic && edit_mode && !seq.is_playing && midi_held_count == 0) {
+            if (cur_row < 31) {
+                cur_row++;
+            } else {
+                cur_row = 0;
+            }
+        }
+    }
+}
+
+void midi_process_cc(uint8_t chan, uint8_t cc_num, uint8_t cc_val) {
+    (void)chan; // Suppress unused parameter warning
+    
+    switch (cc_num) {
+        case 74: // Knob 1 -> Instrument Select (0-127)
+            current_instrument = cc_val;
+            update_dashboard();
+            break;
+            
+        case 71: // Knob 2 -> Volume Select (0-63)
+            current_volume = cc_val >> 1;
+            update_dashboard();
+            break;
+            
+        case 76: // Knob 3 -> BPM (60-240)
+            seq.bpm = 60 + ((uint16_t)cc_val * 180 / 127);
+            seq.ticks_per_row_fp = bpm_to_ticks_fp(seq.bpm);
+            update_lfo_scaler();
+            update_dashboard();
+            break;
+            
+        case 77: // Knob 4 -> Octave (0-8)
+            current_octave = (cc_val * 8) / 127;
+            update_dashboard();
+            break;
+
+        case 93:  // Pad Play Alternative
+        case 115: // Pad Play -> Start/Pause Playback
+            if (cc_val > 0) {
+                seq.is_playing = !seq.is_playing;
+                if (seq.is_playing) {
+                    seq.tick_counter_fp = seq.ticks_per_row_fp;
+                    if (is_song_mode) {
+                        cur_pattern = read_order_xram(cur_order_idx);
+                        render_grid();
+                    }
+                }
+                update_dashboard();
+            }
+            break;
+
+        case 94:  // Pad Stop Alternative
+        case 116: // Pad Stop -> Stop and Reset Playback
+            if (cc_val > 0) {
+                seq.is_playing = false;
+                for (uint8_t i = 0; i < 9; i++) {
+                    OPL_NoteOff(i);
+                }
+                memset(active_midi_notes, 0, sizeof(active_midi_notes));
+                midi_held_count = 0;
+                for (int i = 0; i < 9; i++) {
+                    last_effect[i] = 0xFFFF;
+                    ch_arp[i].active = false;
+                    ch_porta[i].active = false;
+                    ch_volslide[i].active = false;
+                    ch_vibrato[i].active = false;
+                    ch_notecut[i].active = false;
+                    ch_notedelay[i].active = false;
+                    ch_retrigger[i].active = false;
+                    ch_tremolo[i].active = false;
+                    ch_finepitch[i].active = false;
+                }
+                cur_row = 0;
+                seq.tick_counter_fp = 0;
+                play_row = 0;
+                cur_order_idx = 0;
+                update_dashboard();
+            }
+            break;
+
+        case 95:  // Pad Rec Alternative
+        case 117: // Pad Record -> Toggle Record/Edit Mode
+            if (cc_val > 0) {
+                edit_mode = !edit_mode;
+                update_dashboard();
+            }
+            break;
+    }
 }

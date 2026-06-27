@@ -420,7 +420,7 @@ void draw_ui_dashboard(void) {
     // draw_string(2, 3, "MODE: [       ]  OCT:    INS:    (                  )  VOL:    REC: ", HUD_COL_CYAN, HUD_COL_BG);
     draw_string(2, 3, "MODE:[       ] SEQ:                                                REC: ", HUD_COL_CYAN, HUD_COL_BG);
     draw_string(2, 4, "EDIT PAT:                                                          SEQ: ", HUD_COL_CYAN, HUD_COL_BG);
-    draw_string(2, 5, "                                                                   LEN: ", HUD_COL_CYAN, HUD_COL_BG);
+    draw_string(2, 5, "MIDI POLY:                                                         LEN: ", HUD_COL_CYAN, HUD_COL_BG);
     draw_string(2, 6, "                                                                   FOL: ", HUD_COL_CYAN, HUD_COL_BG);
 
     // Instrument Name
@@ -523,6 +523,9 @@ void update_dashboard(void) {
 
     // Follow Mode: ON (Green) or OFF (Red)
     draw_string(74, 6, is_follow_mode ? "ON " : "OFF", is_follow_mode ? HUD_COL_GREEN : HUD_COL_RED, HUD_COL_BG);
+
+    // MIDI Polyphonic Mode: ON (Green) or OFF (Red)
+    draw_string(13, 5, midi_polyphonic ? "ON " : "OFF", midi_polyphonic ? HUD_COL_GREEN : HUD_COL_RED, HUD_COL_BG);
 
     // --- Row 8-12: Operator 1 (Modulator) ---
     draw_hex_byte(text_message_addr + (13 * 80 + 15) * 3, p->m_ave);

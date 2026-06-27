@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <string.h>
 #include "opl.h"
 #include "instruments.h"
 #include "constants.h"
@@ -416,6 +417,7 @@ void OPL_Panic(void) {
 
     // 5. Reset global keyboard memory
     active_midi_note = 0;
+    memset(active_midi_notes, 0, sizeof(active_midi_notes));
     
     // 6. Reset Effect Shadowing so the next note is forced to send everything
     for (int i = 0; i < 9; i++) last_effect[i] = 0xFFFF;
