@@ -4,6 +4,7 @@
 #include "constants.h"
 #include "input.h"
 #include "instruments.h"
+#include "midi.h"
 #include "opl.h"
 #include "player.h"
 #include "screen.h"
@@ -125,6 +126,7 @@ int main(void)
 
         // --- INPUT STAGE ---
         handle_input(); // This MUST update keystates AND prev_keystates
+        midi_task();
 
         if (key_pressed(KEY_ESC)) {
             OPL_Panic();

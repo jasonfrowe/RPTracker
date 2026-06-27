@@ -18,15 +18,16 @@ else()
 endif()
 
 add_executable(RPTracker)
+rp6502_asset(RPTracker help src/main.hlp)
 rp6502_executable(RPTracker
     DATA file
     RESET file
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/main.hlp
 )
 target_sources(RPTracker PRIVATE
     src/main.c
     src/input.c
     src/instruments.c
+    src/midi.c
     src/opl.c
     src/player.c
     src/screen.c

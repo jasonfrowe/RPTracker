@@ -2,6 +2,7 @@
 #include "player.h"
 #include "opl.h"
 #include "input.h"
+#include "midi.h"
 #include "usb_hid_keys.h"
 #include <stdio.h>
 #include <fcntl.h>
@@ -316,6 +317,7 @@ void player_tick(void) {
     bool note_pressed_this_frame = false;
     uint8_t target_note = 0;
     uint8_t semitone = 0;
+    uint8_t live_volume = current_volume;
 
     // If Ctrl is held, we check for shortcuts and then STOP processing.
     // Clipboard operations
@@ -350,21 +352,33 @@ void player_tick(void) {
                 note_pressed_this_frame = true;
                 ch_arp[channel].active = false; // Keyboard input kills any background Arp
                 ch_vibrato[channel].active = false; // Keyboard input kills vibrato
-                break; 
+                break;
             }
         }
     }
 
+    // MIDI input plays like piano keys, but with absolute note
+    // numbers and its own velocity
+    if (!note_pressed_this_frame && midi_note) {
+        target_note = midi_note;
+        live_volume = midi_vel >> 1;
+        if (!live_volume)
+            live_volume = 1;
+        note_pressed_this_frame = true;
+        ch_arp[channel].active = false;
+        ch_vibrato[channel].active = false;
+    }
+
     // 2. Logic: Note On & Recording
     if (note_pressed_this_frame) {
-        if (target_note != active_midi_note) {
+        if (target_note != active_midi_note || midi_fresh) {
             // Live Overdrive: Cut the sequencer's note and play the keyboard note
-            OPL_NoteOff(channel); 
+            OPL_NoteOff(channel);
             // ch_peaks[channel] = 0; // Clear peak
             OPL_SetPatch(channel, &gm_bank[current_instrument]);
-            OPL_SetVolume(channel, current_volume << 1); 
+            OPL_SetVolume(channel, live_volume << 1);
             OPL_NoteOn(channel, target_note);
-            ch_peaks[channel] = current_volume; // Set peak for meter display
+            ch_peaks[channel] = live_volume; // Set peak for meter display
             active_midi_note = target_note;
 
             if (edit_mode) {
@@ -373,7 +387,7 @@ void player_tick(void) {
                 read_cell(cur_pattern, cur_row, cur_channel, &c);
                 c.note = target_note;
                 c.inst = current_instrument;
-                c.vol  = current_volume;
+                c.vol  = live_volume;
                 write_cell(cur_pattern, cur_row, cur_channel, &c);
                 render_row(cur_row);
                 
