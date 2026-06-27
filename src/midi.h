@@ -12,6 +12,7 @@
 void midi_process_note_on(uint8_t chan, uint8_t note, uint8_t velocity);
 void midi_process_note_off(uint8_t chan, uint8_t note);
 void midi_process_cc(uint8_t chan, uint8_t cc_num, uint8_t cc_val);
+void midi_process_pitch_bend(uint8_t chan, uint16_t pb_val);
 
 // Poll MIDI input, called once per frame
 void midi_task(void);

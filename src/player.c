@@ -43,6 +43,10 @@ bool midi_polyphonic = false;
 uint8_t active_midi_notes[9] = {0};
 static uint8_t midi_held_count = 0;
 
+OPL_Patch active_patch;
+static uint16_t current_pitch_bend = 8192;
+static uint8_t current_mod_wheel = 0;
+
 // Export State (additional to those in opl.c)
 static char export_filename[16] = {0};
 static int export_fd = -1;
@@ -94,6 +98,17 @@ static int8_t get_semitone(uint8_t scancode) {
 
         default: return -1;
     }
+}
+
+void select_instrument(uint8_t inst_idx) {
+    if (inst_idx > 127) inst_idx = 127;
+    current_instrument = inst_idx;
+    memcpy(&active_patch, &gm_bank[current_instrument], sizeof(OPL_Patch));
+    update_dashboard();
+}
+
+void player_init(void) {
+    select_instrument(0);
 }
 
 // ============================================================================
@@ -372,7 +387,7 @@ void player_tick(void) {
             // Live Overdrive: Cut the sequencer's note and play the keyboard note
             OPL_NoteOff(channel);
             // ch_peaks[channel] = 0; // Clear peak
-            OPL_SetPatch(channel, &gm_bank[current_instrument]);
+            OPL_SetPatch(channel, &active_patch);
             OPL_SetVolume(channel, live_volume << 1);
             OPL_NoteOn(channel, target_note);
             ch_peaks[channel] = live_volume; // Set peak for meter display
@@ -444,9 +459,8 @@ void player_tick(void) {
         PatternCell cell;
         read_cell(cur_pattern, cur_row, cur_channel, &cell);
         if (cell.note != 0) {
-            current_instrument = cell.inst;
-            OPL_SetPatch(cur_channel, &gm_bank[current_instrument]);
-            update_dashboard();
+            select_instrument(cell.inst);
+            OPL_SetPatch(cur_channel, &active_patch);
         }
     }
 
@@ -1174,8 +1188,7 @@ void modify_instrument(int8_t delta) {
     } 
     else {
         // --- GLOBAL BRUSH EDIT ONLY ---
-        current_instrument = (uint8_t)(current_instrument + delta);
-        update_dashboard(); // Update the "INS" hex at the top
+        select_instrument((uint8_t)(current_instrument + delta));
     }
     update_cursor_visuals(cur_row, cur_row, cur_channel, cur_channel);
     mark_playhead(play_row);
@@ -1386,10 +1399,33 @@ void modify_effect(int8_t delta) {
     render_row(cur_row);
 }
 
+#define SCALE_CC_TO_BYTE(cc) (((uint16_t)(cc) * 255) / 127)
+
+static void sync_opl_patch_reg(uint8_t op, uint8_t offset, uint8_t val) {
+    static const uint8_t mod_offsets[] = {0x00,0x01,0x02,0x08,0x09,0x0A,0x10,0x11,0x12};
+    static const uint8_t car_offsets[] = {0x03,0x04,0x05,0x0B,0x0C,0x0D,0x13,0x14,0x15};
+    const uint8_t* offsets = (op == 1) ? mod_offsets : car_offsets;
+    for (uint8_t i = 0; i < 9; i++) {
+        OPL_Write(offset + offsets[i], val);
+        if (offset == 0x40) {
+            if (op == 1) {
+                shadow_ksl_m[i] = val & 0xC0;
+            } else {
+                shadow_ksl_c[i] = val & 0xC0;
+            }
+        }
+    }
+}
+
 void midi_process_note_on(uint8_t chan, uint8_t note, uint8_t velocity) {
     uint8_t target_ch;
     uint8_t live_vol = velocity >> 1;
     if (!live_vol) live_vol = 1;
+
+    // Volume limiter: clamp live volume to current_volume set by knob/ui
+    if (live_vol > current_volume) {
+        live_vol = current_volume;
+    }
 
     if (midi_polyphonic) {
         static uint8_t next_voice = 0;
@@ -1438,11 +1474,27 @@ void midi_process_note_on(uint8_t chan, uint8_t note, uint8_t velocity) {
 
     ch_arp[target_ch].active = false;
     ch_vibrato[target_ch].active = false;
-    OPL_SetPatch(target_ch, &gm_bank[current_instrument]);
+    OPL_SetPatch(target_ch, &active_patch);
     OPL_SetVolume(target_ch, live_vol << 1);
     OPL_NoteOn(target_ch, note);
     ch_peaks[target_ch] = live_vol;
     
+    // Apply pitch bend if active
+    if (current_pitch_bend != 8192) {
+        int16_t pb_offset = ((int32_t)current_pitch_bend - 8192) / 64;
+        OPL_SetPitch_Fine(target_ch, note, pb_offset);
+    }
+
+    // Apply mod wheel vibrato if active
+    if (current_mod_wheel > 0) {
+        ch_vibrato[target_ch].active = true;
+        ch_vibrato[target_ch].base_note = note;
+        ch_vibrato[target_ch].rate = 4;
+        ch_vibrato[target_ch].depth = current_mod_wheel >> 3;
+        ch_vibrato[target_ch].waveform = 0;
+        ch_vibrato[target_ch].phase = 0;
+    }
+
     active_midi_notes[target_ch] = note;
     
     // Update midi_held_count based on actual active notes
@@ -1487,6 +1539,7 @@ void midi_process_note_off(uint8_t chan, uint8_t note) {
             target_ch = ch;
             OPL_NoteOff(target_ch);
             active_midi_notes[target_ch] = 0;
+            ch_vibrato[target_ch].active = false; // Turn off software vibrato
             found = true;
             break;
         }
@@ -1511,13 +1564,23 @@ void midi_process_note_off(uint8_t chan, uint8_t note) {
     }
 }
 
+void midi_process_pitch_bend(uint8_t chan, uint16_t pb_val) {
+    (void)chan;
+    current_pitch_bend = pb_val;
+    for (uint8_t ch = 0; ch < 9; ch++) {
+        if (active_midi_notes[ch] != 0) {
+            int16_t pb_offset = ((int32_t)pb_val - 8192) / 64; // range -128 to +127
+            OPL_SetPitch_Fine(ch, active_midi_notes[ch], pb_offset);
+        }
+    }
+}
+
 void midi_process_cc(uint8_t chan, uint8_t cc_num, uint8_t cc_val) {
     (void)chan; // Suppress unused parameter warning
     
     switch (cc_num) {
         case 74: // Knob 1 -> Instrument Select (0-127)
-            current_instrument = cc_val;
-            update_dashboard();
+            select_instrument(cc_val);
             break;
             
         case 71: // Knob 2 -> Volume Select (0-63)
@@ -1537,8 +1600,70 @@ void midi_process_cc(uint8_t chan, uint8_t cc_num, uint8_t cc_val) {
             update_dashboard();
             break;
 
-        case 93:  // Pad Play Alternative
-        case 115: // Pad Play -> Start/Pause Playback
+        // --- OP1 (Modulator) CCs ---
+        case 93: // Knob 5: OP1 Mult/Vib (m_ave)
+            active_patch.m_ave = SCALE_CC_TO_BYTE(cc_val);
+            sync_opl_patch_reg(1, 0x20, active_patch.m_ave);
+            update_dashboard();
+            break;
+        case 18: // Knob 6: OP1 KSL/LEV (m_ksl)
+            active_patch.m_ksl = SCALE_CC_TO_BYTE(cc_val);
+            sync_opl_patch_reg(1, 0x40, active_patch.m_ksl);
+            update_dashboard();
+            break;
+        case 19: // Knob 7: OP1 ATT/DEC (m_atdec)
+            active_patch.m_atdec = SCALE_CC_TO_BYTE(cc_val);
+            sync_opl_patch_reg(1, 0x60, active_patch.m_atdec);
+            update_dashboard();
+            break;
+        case 16: // Knob 8: OP1 SUS/REL (m_susrel)
+            active_patch.m_susrel = SCALE_CC_TO_BYTE(cc_val);
+            sync_opl_patch_reg(1, 0x80, active_patch.m_susrel);
+            update_dashboard();
+            break;
+
+        // --- OP2 (Carrier) CCs ---
+        case 82: // Fader 1: OP2 MULT/VIB (c_ave)
+            active_patch.c_ave = SCALE_CC_TO_BYTE(cc_val);
+            sync_opl_patch_reg(2, 0x20, active_patch.c_ave);
+            update_dashboard();
+            break;
+        case 83: // Fader 2: OP2 KSL/LEV (c_ksl)
+            active_patch.c_ksl = SCALE_CC_TO_BYTE(cc_val);
+            sync_opl_patch_reg(2, 0x40, active_patch.c_ksl);
+            update_dashboard();
+            break;
+        case 85: // Fader 3: OP2 ATT/DEC (c_atdec)
+            active_patch.c_atdec = SCALE_CC_TO_BYTE(cc_val);
+            sync_opl_patch_reg(2, 0x60, active_patch.c_atdec);
+            update_dashboard();
+            break;
+        case 17: // Fader 4: OP2 SUS/REL (c_susrel)
+            active_patch.c_susrel = SCALE_CC_TO_BYTE(cc_val);
+            sync_opl_patch_reg(2, 0x80, active_patch.c_susrel);
+            update_dashboard();
+            break;
+
+        // --- Mod Wheel ---
+        case 1: // Mod Wheel (CC 1) -> Vibrato Depth
+            current_mod_wheel = cc_val;
+            for (uint8_t ch = 0; ch < 9; ch++) {
+                if (active_midi_notes[ch] != 0) {
+                    if (cc_val > 0) {
+                        ch_vibrato[ch].active = true;
+                        ch_vibrato[ch].base_note = active_midi_notes[ch];
+                        ch_vibrato[ch].rate = 4;
+                        ch_vibrato[ch].depth = cc_val >> 3;
+                        ch_vibrato[ch].waveform = 0;
+                    } else {
+                        ch_vibrato[ch].active = false;
+                        OPL_SetPitch(ch, active_midi_notes[ch]);
+                    }
+                }
+            }
+            break;
+
+        case 63: // Pad Play -> Start/Pause Playback
             if (cc_val > 0) {
                 seq.is_playing = !seq.is_playing;
                 if (seq.is_playing) {
@@ -1552,8 +1677,7 @@ void midi_process_cc(uint8_t chan, uint8_t cc_num, uint8_t cc_val) {
             }
             break;
 
-        case 94:  // Pad Stop Alternative
-        case 116: // Pad Stop -> Stop and Reset Playback
+        case 62: // Pad Stop -> Stop and Reset Playback
             if (cc_val > 0) {
                 seq.is_playing = false;
                 for (uint8_t i = 0; i < 9; i++) {
@@ -1581,11 +1705,42 @@ void midi_process_cc(uint8_t chan, uint8_t cc_num, uint8_t cc_val) {
             }
             break;
 
-        case 95:  // Pad Rec Alternative
-        case 117: // Pad Record -> Toggle Record/Edit Mode
+        case 60: // Pad Record -> Toggle Record/Edit Mode
             if (cc_val > 0) {
                 edit_mode = !edit_mode;
                 update_dashboard();
+            }
+            break;
+
+        case 61: // Pad Panic -> Kill All Notes
+            if (cc_val > 0) {
+                OPL_Panic();
+            }
+            break;
+
+        case 59: // Pad Song/Pattern Mode -> Toggle
+            if (cc_val > 0) {
+                is_song_mode = !is_song_mode;
+                update_dashboard();
+            }
+            break;
+
+        case 58: // Pad Polyphony -> Toggle
+            if (cc_val > 0) {
+                midi_polyphonic = !midi_polyphonic;
+                update_dashboard();
+            }
+            break;
+
+        case 56: // Pad Prev Pattern
+            if (cc_val > 0) {
+                change_pattern(-1);
+            }
+            break;
+
+        case 57: // Pad Next Pattern
+            if (cc_val > 0) {
+                change_pattern(1);
             }
             break;
     }

@@ -71,15 +71,30 @@ RPTracker features USB MIDI keyboard input integration (e.g. Arturia MiniLab 3).
 ### 2. Control Change (CC) Knob & Pad Assignments
 The knobs and transport pads on your MIDI keyboard map to the following tracker parameters (values updated instantly on the UI):
 
-| Control | MIDI CC | Action / Parameter Mapping | Range |
+| Control | MIDI CC / Msg | Action / Parameter Mapping | Range |
 | --- | --- | --- | --- |
 | **Encoder 1** | CC 74 | **Instrument Select** | `00` - `7F` (128 patches) |
-| **Encoder 2** | CC 71 | **Volume Select** | `00` - `3F` (0 - 63) |
+| **Encoder 2** | CC 71 | **Volume Limiter (Peak cap)** | `00` - `3F` (0 - 63) |
 | **Encoder 3** | CC 76 | **Tempo / BPM Adjust** | `60` - `240` BPM |
 | **Encoder 4** | CC 77 | **Octave Select** | `0` - `8` |
-| **Play Pad** | CC 115 or 93 | **Start / Pause Playback** | Value > 0 triggers |
-| **Stop Pad** | CC 116 or 94 | **Stop / Reset Playback** | Value > 0 stops & silences OPL |
-| **Record Pad** | CC 117 or 95 | **Toggle Record / Edit Mode** | Value > 0 toggles |
+| **Encoder 5** | CC 93 | **OP1 (Modulator) Mult/Vib** | `00` - `FF` (OPL `$20` reg) |
+| **Encoder 6** | CC 18 | **OP1 (Modulator) KSL/LEV** | `00` - `FF` (OPL `$40` reg) |
+| **Encoder 7** | CC 19 | **OP1 (Modulator) ATT/DEC** | `00` - `FF` (OPL `$60` reg) |
+| **Encoder 8** | CC 16 | **OP1 (Modulator) SUS/REL** | `00` - `FF` (OPL `$80` reg) |
+| **Fader 1**   | CC 82 | **OP2 (Carrier) MULT/VIB** | `00` - `FF` (OPL `$20` reg) |
+| **Fader 2**   | CC 83 | **OP2 (Carrier) KSL/LEV** | `00` - `FF` (OPL `$40` reg) |
+| **Fader 3**   | CC 85 | **OP2 (Carrier) ATT/DEC** | `00` - `FF` (OPL `$60` reg) |
+| **Fader 4**   | CC 17 | **OP2 (Carrier) SUS/REL** | `00` - `FF` (OPL `$80` reg) |
+| **Pitch Bend**| Pitch Bend Msg | **Real-Time Pitch Bend** | ±2 Semitones |
+| **Mod Wheel** | CC 1 | **Vibrato Depth Control** | `00` - `0F` depth scale |
+| **Prev Pattern Pad**| CC 56 | **Previous Pattern** | Value > 0 triggers |
+| **Next Pattern Pad**| CC 57 | **Next Pattern** | Value > 0 triggers |
+| **Poly Toggle Pad**| CC 58 | **Toggle Polyphonic Mode** | Value > 0 toggles |
+| **Song/Pattern Pad**| CC 59 | **Toggle Song vs Pattern Mode**| Value > 0 toggles |
+| **Record Pad** | CC 60 | **Toggle Record / Edit Mode** | Value > 0 toggles |
+| **Panic Pad**  | CC 61 | **Panic (Kill All Notes)** | Value > 0 triggers panic |
+| **Stop Pad**   | CC 62 | **Stop / Reset Playback** | Value > 0 stops & silences OPL |
+| **Play Pad**   | CC 63 | **Start / Pause Playback** | Value > 0 triggers |
 
 ---
 

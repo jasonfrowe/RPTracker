@@ -487,7 +487,7 @@ void draw_ui_dashboard(void) {
 }
 
 void update_dashboard(void) {
-    const OPL_Patch* p = &gm_bank[current_instrument];
+    const OPL_Patch* p = &active_patch;
 
     // --- Row 3: Brush Info ---
     // Mode: PATTERN (Green) or SONG (Yellow)

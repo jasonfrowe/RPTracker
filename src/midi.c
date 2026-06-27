@@ -80,6 +80,9 @@ static void midi_handle_message(void)
         printf("[cc %02X %02X]", midi_data[0], midi_data[1]);
 #endif
         midi_process_cc(chan, midi_data[0], midi_data[1]);
+    } else if (kind == 0xE0) {
+        // Pitch Bend LSB is midi_data[0], MSB is midi_data[1]
+        midi_process_pitch_bend(chan, ((uint16_t)midi_data[1] << 7) | midi_data[0]);
     }
 }
 

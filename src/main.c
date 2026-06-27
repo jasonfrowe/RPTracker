@@ -103,7 +103,7 @@ int main(void)
 
     // 4. Software Initialization
     init_input_system(); 
-    // player_init();       // Sets up initial OPL patch
+    player_init();       // Sets up initial OPL patch
 
     // Default all OPL channels to Piano
     for (uint8_t i = 0; i < 9; i++){
@@ -186,7 +186,7 @@ int main(void)
                 // SYNC: Ensure the OPL2 hardware channel we just moved into 
                 // is loaded with our current "brush" instrument.
                 if (cur_channel != prev_chan) {
-                    OPL_SetPatch(cur_channel, &gm_bank[current_instrument]);
+                    OPL_SetPatch(cur_channel, &active_patch);
                 }
             }
 

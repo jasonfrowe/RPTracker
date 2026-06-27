@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "instruments.h"
 
 // Buffer to hold one full pattern (32 rows * 9 channels * 5 bytes)
 #define PATTERN_SIZE 1440U 
@@ -59,5 +60,9 @@ extern uint16_t get_pattern_xram_addr(uint8_t pat, uint8_t row, uint8_t chan);
 extern uint8_t active_midi_note;
 extern bool midi_polyphonic;
 extern uint8_t active_midi_notes[9];
+extern OPL_Patch active_patch;
+
+extern void select_instrument(uint8_t inst_idx);
+extern void midi_process_pitch_bend(uint8_t chan, uint16_t pb_val);
 
 #endif
