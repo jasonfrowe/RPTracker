@@ -42,6 +42,7 @@ uint8_t current_volume = 63; // Max volume (0x3F)
 bool midi_polyphonic = false;
 uint8_t active_midi_notes[9] = {0};
 static uint8_t midi_held_count = 0;
+static uint8_t active_midi_note_rows[9] = {0};
 
 OPL_Patch active_patch;
 static uint16_t current_pitch_bend = 8192;
@@ -351,6 +352,10 @@ void player_tick(void) {
             midi_polyphonic = !midi_polyphonic;
             update_dashboard();
         }
+        if (key_pressed(KEY_R)) {
+            record_overwrite = !record_overwrite;
+            update_dashboard();
+        }
         if (key_pressed(KEY_E)) {
             // Start binary export
             start_export();
@@ -577,6 +582,19 @@ void sequencer_step(void) {
         // Subtract (preserving fractional remainder for smooth timing)
         seq.tick_counter_fp -= seq.ticks_per_row_fp;
 
+
+        // Replace / Overwrite mode: clear cells on the current playhead row
+        if (edit_mode && record_overwrite) {
+            PatternCell empty_cell = {0, 0, 0, 0};
+            if (midi_polyphonic) {
+                for (uint8_t ch = 0; ch < 9; ch++) {
+                    write_cell(cur_pattern, play_row, ch, &empty_cell);
+                }
+            } else {
+                write_cell(cur_pattern, play_row, cur_channel, &empty_cell);
+            }
+            render_row(play_row);
+        }
 
         for (uint8_t ch = 0; ch < 9; ch++) {
             if ((ch == cur_channel && active_midi_note != 0) || active_midi_notes[ch] != 0) continue;
@@ -962,6 +980,7 @@ void handle_transport_controls() {
                 // ch_peaks[i] = 0; // Clear peak
             }
             memset(active_midi_notes, 0, sizeof(active_midi_notes));
+            memset(active_midi_note_rows, 0, sizeof(active_midi_note_rows));
             midi_held_count = 0;
             
             for (int i=0; i<9; i++) {
@@ -1427,6 +1446,47 @@ void midi_process_note_on(uint8_t chan, uint8_t note, uint8_t velocity) {
         live_vol = current_volume;
     }
 
+    uint8_t play_note = note;
+    const OPL_Patch* patch_to_use = &active_patch;
+    uint8_t inst_to_record = current_instrument;
+    bool is_drum = false;
+
+    // Check if it's a drum hit on MIDI Channel 10 (chan == 9)
+    if (chan == 9) {
+        uint8_t drum_inst = 0;
+        // Map G#1..D#2 (Roland standard 32..39 or Yamaha standard 44..51)
+        if (note >= 32 && note <= 39) {
+            switch (note) {
+                case 32: drum_inst = 253; break; // Bass Drum
+                case 33: drum_inst = 254; break; // Snare
+                case 34: drum_inst = 255; break; // Closed Hat
+                case 35: drum_inst = 180; break; // Open Hat
+                case 36: drum_inst = 119; break; // Clap
+                case 37: drum_inst = 173; break; // Cowbell
+                case 38: drum_inst = 179; break; // Tom
+                case 39: drum_inst = 183; break; // Crash
+            }
+        } else if (note >= 44 && note <= 51) {
+            switch (note) {
+                case 44: drum_inst = 253; break; // Bass Drum
+                case 45: drum_inst = 254; break; // Snare
+                case 46: drum_inst = 255; break; // Closed Hat
+                case 47: drum_inst = 180; break; // Open Hat
+                case 48: drum_inst = 119; break; // Clap
+                case 49: drum_inst = 173; break; // Cowbell
+                case 50: drum_inst = 179; break; // Tom
+                case 51: drum_inst = 183; break; // Crash
+            }
+        }
+
+        if (drum_inst != 0) {
+            play_note = 48; // Always C3
+            patch_to_use = &gm_bank[drum_inst];
+            inst_to_record = drum_inst;
+            is_drum = true;
+        }
+    }
+
     if (midi_polyphonic) {
         static uint8_t next_voice = 0;
         int8_t matched_ch = -1;
@@ -1463,7 +1523,7 @@ void midi_process_note_on(uint8_t chan, uint8_t note, uint8_t velocity) {
             target_ch = free_ch;
         }
     } else {
-        // Channel-mapped mode
+        // Channel-mapped mode (respects the active channel cursor when chan >= 9)
         if (chan < 9) {
             target_ch = chan;
         } else {
@@ -1474,21 +1534,21 @@ void midi_process_note_on(uint8_t chan, uint8_t note, uint8_t velocity) {
 
     ch_arp[target_ch].active = false;
     ch_vibrato[target_ch].active = false;
-    OPL_SetPatch(target_ch, &active_patch);
+    OPL_SetPatch(target_ch, patch_to_use);
     OPL_SetVolume(target_ch, live_vol << 1);
-    OPL_NoteOn(target_ch, note);
+    OPL_NoteOn(target_ch, play_note);
     ch_peaks[target_ch] = live_vol;
     
-    // Apply pitch bend if active
-    if (current_pitch_bend != 8192) {
+    // Apply pitch bend if active (skip for drums to keep pitch pristine)
+    if (!is_drum && current_pitch_bend != 8192) {
         int16_t pb_offset = ((int32_t)current_pitch_bend - 8192) / 64;
-        OPL_SetPitch_Fine(target_ch, note, pb_offset);
+        OPL_SetPitch_Fine(target_ch, play_note, pb_offset);
     }
 
-    // Apply mod wheel vibrato if active
-    if (current_mod_wheel > 0) {
+    // Apply mod wheel vibrato if active (skip for drums)
+    if (!is_drum && current_mod_wheel > 0) {
         ch_vibrato[target_ch].active = true;
-        ch_vibrato[target_ch].base_note = note;
+        ch_vibrato[target_ch].base_note = play_note;
         ch_vibrato[target_ch].rate = 4;
         ch_vibrato[target_ch].depth = current_mod_wheel >> 3;
         ch_vibrato[target_ch].waveform = 0;
@@ -1496,6 +1556,10 @@ void midi_process_note_on(uint8_t chan, uint8_t note, uint8_t velocity) {
     }
 
     active_midi_notes[target_ch] = note;
+    
+    // Save target row where the note starts for note-off recording alignment
+    uint8_t rec_row = seq.is_playing ? play_row : cur_row;
+    active_midi_note_rows[target_ch] = rec_row;
     
     // Update midi_held_count based on actual active notes
     {
@@ -1506,18 +1570,18 @@ void midi_process_note_on(uint8_t chan, uint8_t note, uint8_t velocity) {
         midi_held_count = count;
     }
 
-    // Record if edit mode is active and sequencer is stopped
-    if (edit_mode && !seq.is_playing) {
+    // Record if edit mode is active
+    if (edit_mode) {
         PatternCell c;
-        read_cell(cur_pattern, cur_row, target_ch, &c);
-        c.note = note;
-        c.inst = current_instrument;
+        read_cell(cur_pattern, rec_row, target_ch, &c);
+        c.note = play_note;
+        c.inst = inst_to_record;
         c.vol = live_vol;
-        write_cell(cur_pattern, cur_row, target_ch, &c);
-        render_row(cur_row);
+        write_cell(cur_pattern, rec_row, target_ch, &c);
+        render_row(rec_row);
 
-        // Monophonic mode advances immediately on key press
-        if (!midi_polyphonic) {
+        // Monophonic mode advances immediately on key press (only when sequencer is stopped)
+        if (!midi_polyphonic && !seq.is_playing) {
             if (cur_row < 31) {
                 cur_row++;
             } else {
@@ -1546,6 +1610,23 @@ void midi_process_note_off(uint8_t chan, uint8_t note) {
     }
 
     if (found) {
+        // Record Note Off if edit mode and sequencer are active
+        if (edit_mode && seq.is_playing) {
+            uint8_t note_on_row = active_midi_note_rows[target_ch];
+            if (play_row != note_on_row) {
+                PatternCell c;
+                read_cell(cur_pattern, play_row, target_ch, &c);
+                if (c.note == 0) {
+                    c.note = 255;
+                    c.inst = current_instrument;
+                    c.vol = 0;
+                    c.effect = 0xF000; // Kill effect
+                    write_cell(cur_pattern, play_row, target_ch, &c);
+                    render_row(play_row);
+                }
+            }
+        }
+
         // Update midi_held_count based on remaining active notes
         uint8_t count = 0;
         for (uint8_t i = 0; i < 9; i++) {
@@ -1553,7 +1634,7 @@ void midi_process_note_off(uint8_t chan, uint8_t note) {
         }
         midi_held_count = count;
 
-        // Chords advance row when all keys are released
+        // Chords advance row when all keys are released (only when sequencer is stopped)
         if (midi_polyphonic && edit_mode && !seq.is_playing && midi_held_count == 0) {
             if (cur_row < 31) {
                 cur_row++;
@@ -1595,8 +1676,11 @@ void midi_process_cc(uint8_t chan, uint8_t cc_num, uint8_t cc_val) {
             update_dashboard();
             break;
             
-        case 77: // Knob 4 -> Octave (0-8)
-            current_octave = (cc_val * 8) / 127;
+        case 77: // Knob 4 -> Feedback Select (0-15)
+            active_patch.feedback = cc_val >> 3;
+            for (uint8_t i = 0; i < 9; i++) {
+                OPL_Write(0xC0 + i, active_patch.feedback);
+            }
             update_dashboard();
             break;
 
@@ -1684,6 +1768,7 @@ void midi_process_cc(uint8_t chan, uint8_t cc_num, uint8_t cc_val) {
                     OPL_NoteOff(i);
                 }
                 memset(active_midi_notes, 0, sizeof(active_midi_notes));
+                memset(active_midi_note_rows, 0, sizeof(active_midi_note_rows));
                 midi_held_count = 0;
                 for (int i = 0; i < 9; i++) {
                     last_effect[i] = 0xFFFF;

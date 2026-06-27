@@ -18,6 +18,7 @@ uint8_t cur_pattern = 0;
 uint8_t cur_row = 0;        // 0-31
 uint8_t cur_channel = 0;    // 0-8
 bool edit_mode = false;     // Are we recording?
+bool record_overwrite = false; // Overwrite (Replace) mode?
 uint8_t last_p_row = 255; // < and > symbols 
 
 void write_cell(uint8_t pat, uint8_t row, uint8_t chan, PatternCell *cell) {
@@ -421,7 +422,7 @@ void draw_ui_dashboard(void) {
     draw_string(2, 3, "MODE:[       ] SEQ:                                                REC: ", HUD_COL_CYAN, HUD_COL_BG);
     draw_string(2, 4, "EDIT PAT:                                                          SEQ: ", HUD_COL_CYAN, HUD_COL_BG);
     draw_string(2, 5, "MIDI POLY:                                                         LEN: ", HUD_COL_CYAN, HUD_COL_BG);
-    draw_string(2, 6, "                                                                   FOL: ", HUD_COL_CYAN, HUD_COL_BG);
+    draw_string(2, 6, "REC:                                                               FOL: ", HUD_COL_CYAN, HUD_COL_BG);
 
     // Instrument Name
     draw_string(2, 8, "INS:    (                  )  VOL:     OCT:   ", HUD_COL_CYAN, HUD_COL_BG);
@@ -524,8 +525,11 @@ void update_dashboard(void) {
     // Follow Mode: ON (Green) or OFF (Red)
     draw_string(74, 6, is_follow_mode ? "ON " : "OFF", is_follow_mode ? HUD_COL_GREEN : HUD_COL_RED, HUD_COL_BG);
 
-    // MIDI Polyphonic Mode: ON (Green) or OFF (Red)
+    // MIDI Polyphonic Mode: ON (Green) or OFF (Red) (Row 5, col 13)
     draw_string(13, 5, midi_polyphonic ? "ON " : "OFF", midi_polyphonic ? HUD_COL_GREEN : HUD_COL_RED, HUD_COL_BG);
+
+    // Record Method: APP (Cyan) or OVR (Magenta) (Row 6, col 7)
+    draw_string(7, 6, record_overwrite ? "OVR" : "APP", record_overwrite ? HUD_COL_MAGENTA : HUD_COL_CYAN, HUD_COL_BG);
 
     // --- Row 8-12: Operator 1 (Modulator) ---
     draw_hex_byte(text_message_addr + (13 * 80 + 15) * 3, p->m_ave);

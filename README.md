@@ -32,9 +32,12 @@ These keys adjust the settings used when recording **new** notes.
 *   **ESC**: **Emergency Panic.** Immediate silence on all channels.
 
 ### 4. Editing & Grid Commands
-*   **Spacebar**: Toggle **Edit Mode**.
-    *   *Blue Cursor:* Navigation only. Piano keys play sounds for preview.
-    *   *Red Cursor:* Record Mode. Piano keys enter data and auto-advance.
+*   **Spacebar**: Toggle **Record Mode** (ON/OFF).
+    *   *OFF (Blue Cursor / Green HUD):* Navigation only. Live keys play sounds for preview.
+    *   *ON (Red Cursor / Red HUD):* Recording active.
+*   **Ctrl + R**: Toggle **Append / Overwrite** recording method.
+    *   *APP (Cyan REC HUD):* Append / Overdub Mode. Keeps existing notes, recording new hits on top. Ideal for layering loops.
+    *   *OVR (Magenta REC HUD):* Tape-style Overwrite Mode. Erases existing note data on the active channel(s) as the playhead advances, replacing it with your live play.
 *   **Backspace / Delete**: Clear the current cell (wipes Note, Ins, Vol, and Effect).
 *   **Grave ( ` )**: Insert **Note Off** (`===`) and **Kill Effect** (`F000`).
 *   **- / =**: **Transpose** the note in the current cell by **1 semitone**.
@@ -76,7 +79,7 @@ The knobs and transport pads on your MIDI keyboard map to the following tracker 
 | **Encoder 1** | CC 74 | **Instrument Select** | `00` - `7F` (128 patches) |
 | **Encoder 2** | CC 71 | **Volume Limiter (Peak cap)** | `00` - `3F` (0 - 63) |
 | **Encoder 3** | CC 76 | **Tempo / BPM Adjust** | `60` - `240` BPM |
-| **Encoder 4** | CC 77 | **Octave Select** | `0` - `8` |
+| **Encoder 4** | CC 77 | **Feedback / Synth Type** | `00` - `0F` (OPL `$C0` reg) |
 | **Encoder 5** | CC 93 | **OP1 (Modulator) Mult/Vib** | `00` - `FF` (OPL `$20` reg) |
 | **Encoder 6** | CC 18 | **OP1 (Modulator) KSL/LEV** | `00` - `FF` (OPL `$40` reg) |
 | **Encoder 7** | CC 19 | **OP1 (Modulator) ATT/DEC** | `00` - `FF` (OPL `$60` reg) |
@@ -91,10 +94,22 @@ The knobs and transport pads on your MIDI keyboard map to the following tracker 
 | **Next Pattern Pad**| CC 57 | **Next Pattern** | Value > 0 triggers |
 | **Poly Toggle Pad**| CC 58 | **Toggle Polyphonic Mode** | Value > 0 toggles |
 | **Song/Pattern Pad**| CC 59 | **Toggle Song vs Pattern Mode**| Value > 0 toggles |
-| **Record Pad** | CC 60 | **Toggle Record / Edit Mode** | Value > 0 toggles |
+| **Record Pad** | CC 60 | **Toggle Record Mode** | Value > 0 toggles ON/OFF |
 | **Panic Pad**  | CC 61 | **Panic (Kill All Notes)** | Value > 0 triggers panic |
 | **Stop Pad**   | CC 62 | **Stop / Reset Playback** | Value > 0 stops & silences OPL |
 | **Play Pad**   | CC 63 | **Start / Pause Playback** | Value > 0 triggers |
+
+### 🥁 MIDI Pad Drum Kit (Channel 10)
+When playing on MIDI Channel 10 (typically Bank B of your pads), notes **G#1 through D#2** (MIDI notes 32–39) are automatically remapped to trigger a polyphonic OPL2 drum kit. The notes are played at standard fundamental pitch **C3 (48)** and recorded directly into the sequencer with their respective percussion instruments:
+
+* **Pad 1 (G#1 / 32)**: Acoustic Bass Drum (`169`)
+* **Pad 2 (A-1 / 33)**: Acoustic Snare (`172`)
+* **Pad 3 (A#1 / 34)**: Closed Hi-Hat (`176`)
+* **Pad 4 (B-1 / 35)**: Open Hi-Hat (`180`)
+* **Pad 5 (C-2 / 36)**: Hand Clap (`173`)
+* **Pad 6 (C#2 / 37)**: Cowbell (`189`)
+* **Pad 7 (D-2 / 38)**: Low Tom (`179`)
+* **Pad 8 (D#2 / 39)**: Crash Cymbal (`183`)
 
 ---
 

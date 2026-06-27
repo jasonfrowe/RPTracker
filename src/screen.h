@@ -20,6 +20,7 @@ typedef struct {
 } PatternCell;
 
 extern bool edit_mode;
+extern bool record_overwrite;
 extern uint8_t cur_row;
 extern uint8_t cur_pattern;
 extern uint8_t cur_channel;
