@@ -64,7 +64,8 @@ RPTracker features USB MIDI keyboard input integration (e.g. Arturia MiniLab 3).
 * **Channel-Mapped Mode (Default):** MIDI Channels 1–9 (`chan` 0–8) play directly on their corresponding tracker channels 0–8. This allows multitembral OPL playback and recording. Higher MIDI channels fallback to the active grid column.
 * **Polyphonic Mode:** Spread notes across multiple tracker channels dynamically.
   * Toggle with **Ctrl + P**. Visual status is shown on the dashboard (`MIDI POLY: ON/OFF`).
-  * In Polyphonic mode, new note-ons are allocated to free OPL channels.
+  * **Cyclical Round-Robin Allocation:** Spreads new notes across channels sequentially. This prevents newly pressed notes from immediately killing the release tail (envelope decay) of previously released notes.
+  * **Note-Matching Retrigger:** If a note is struck again before its release tail ends, it is retriggered on the same OPL voice to prevent duplicate voices from consuming all channels.
   * **Chord Recording:** In record (`edit`) mode, you can play a chord, and notes are entered on the same row across different columns. The playhead row only advances to the next step when you release all keys of the chord (MIDI held note count drops to 0).
 
 ### 2. Control Change (CC) Knob & Pad Assignments

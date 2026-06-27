@@ -1392,22 +1392,40 @@ void midi_process_note_on(uint8_t chan, uint8_t note, uint8_t velocity) {
     if (!live_vol) live_vol = 1;
 
     if (midi_polyphonic) {
-        // Find a free channel
-        int8_t free_ch = -1;
-        for (int8_t i = 0; i < 9; i++) {
-            if (active_midi_notes[i] == 0) {
-                free_ch = i;
+        static uint8_t next_voice = 0;
+        int8_t matched_ch = -1;
+
+        // 1. Note-Matching: Check if this exact note is already playing on any channel
+        for (uint8_t i = 0; i < 9; i++) {
+            if (active_midi_notes[i] == note) {
+                matched_ch = i;
                 break;
             }
         }
-        // Round-robin steal if none free
-        if (free_ch == -1) {
-            static uint8_t rr_ptr = 0;
-            free_ch = rr_ptr;
-            rr_ptr = (rr_ptr + 1) % 9;
-            OPL_NoteOff(free_ch);
+
+        if (matched_ch != -1) {
+            target_ch = matched_ch;
+            OPL_NoteOff(target_ch);
+        } else {
+            // 2. Cyclical search: Find a free channel starting from next_voice
+            int8_t free_ch = -1;
+            for (uint8_t i = 0; i < 9; i++) {
+                uint8_t ch = (next_voice + i) % 9;
+                if (active_midi_notes[ch] == 0) {
+                    free_ch = ch;
+                    next_voice = (ch + 1) % 9;
+                    break;
+                }
+            }
+
+            // 3. Voice Stealing: If no channel is free, steal next_voice
+            if (free_ch == -1) {
+                free_ch = next_voice;
+                next_voice = (next_voice + 1) % 9;
+                OPL_NoteOff(free_ch);
+            }
+            target_ch = free_ch;
         }
-        target_ch = free_ch;
     } else {
         // Channel-mapped mode
         if (chan < 9) {
@@ -1425,11 +1443,16 @@ void midi_process_note_on(uint8_t chan, uint8_t note, uint8_t velocity) {
     OPL_NoteOn(target_ch, note);
     ch_peaks[target_ch] = live_vol;
     
-    if (active_midi_notes[target_ch] != 0) {
-        if (midi_held_count > 0) midi_held_count--;
-    }
     active_midi_notes[target_ch] = note;
-    midi_held_count++;
+    
+    // Update midi_held_count based on actual active notes
+    {
+        uint8_t count = 0;
+        for (uint8_t i = 0; i < 9; i++) {
+            if (active_midi_notes[i] != 0) count++;
+        }
+        midi_held_count = count;
+    }
 
     // Record if edit mode is active and sequencer is stopped
     if (edit_mode && !seq.is_playing) {
@@ -1453,37 +1476,29 @@ void midi_process_note_on(uint8_t chan, uint8_t note, uint8_t velocity) {
 }
 
 void midi_process_note_off(uint8_t chan, uint8_t note) {
+    (void)chan; // Suppress unused parameter warning
     bool found = false;
     uint8_t target_ch = 0;
-    if (midi_polyphonic) {
-        // Find channel playing this note
-        for (uint8_t ch = 0; ch < 9; ch++) {
-            if (active_midi_notes[ch] == note) {
-                target_ch = ch;
-                if (!seq.is_playing) {
-                    OPL_NoteOff(target_ch);
-                }
-                active_midi_notes[target_ch] = 0;
-                found = true;
-                break;
-            }
-        }
-    } else {
-        // Channel-mapped mode
-        target_ch = (chan < 9) ? chan : cur_channel;
-        if (active_midi_notes[target_ch] == note) {
-            if (!seq.is_playing) {
-                OPL_NoteOff(target_ch);
-            }
+    
+    // Search all channels to find which one is playing this note.
+    // This is robust against cursor movement and mode changes.
+    for (uint8_t ch = 0; ch < 9; ch++) {
+        if (active_midi_notes[ch] == note) {
+            target_ch = ch;
+            OPL_NoteOff(target_ch);
             active_midi_notes[target_ch] = 0;
             found = true;
+            break;
         }
     }
 
     if (found) {
-        if (midi_held_count > 0) {
-            midi_held_count--;
+        // Update midi_held_count based on remaining active notes
+        uint8_t count = 0;
+        for (uint8_t i = 0; i < 9; i++) {
+            if (active_midi_notes[i] != 0) count++;
         }
+        midi_held_count = count;
 
         // Chords advance row when all keys are released
         if (midi_polyphonic && edit_mode && !seq.is_playing && midi_held_count == 0) {
