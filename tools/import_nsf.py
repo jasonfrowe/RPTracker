@@ -32,11 +32,12 @@ class PatternCell:
         hi = (self.effect >> 8) & 0xFF
         return bytes([self.note, self.inst, self.vol, lo, hi])
 
-class RPT2File:
+class RPT3File:
     def __init__(self):
         self.octave = 3
         self.volume = 63
         self.song_length = 1
+        self.bpm = 150
         self.patterns = [[PatternCell() for _ in range(CHANS)] for _ in range(ROWS * PATTERNS)]
         self.sequence = [0] * 256
 
@@ -49,9 +50,9 @@ class RPT2File:
         os.makedirs(os.path.dirname(os.path.abspath(filename)), exist_ok=True)
         with open(filename, 'wb') as f:
             # Header
-            f.write(b'RPT2')
-            # Metadata: Octave (B), Volume (B), Song Length (H)
-            f.write(struct.pack('<BBH', self.octave, self.volume, self.song_length))
+            f.write(b'RPT3')
+            # Metadata: Octave (B), Volume (B), Song Length (H), BPM (H)
+            f.write(struct.pack('<BBHH', self.octave, self.volume, self.song_length, self.bpm))
             # 32 patterns x 32 rows x 9 channels x 5 bytes
             for p in range(PATTERNS):
                 for r in range(ROWS):
@@ -375,7 +376,7 @@ class NSFConverter:
         self.artist = self.data[0x2E:0x4E].split(b'\x00')[0].decode('latin1', 'ignore').strip()
         self.payload = self.data[0x80:]
 
-    def convert_track(self, track_idx, max_seconds=30):
+    def convert_track(self, track_idx, max_seconds=100):
         # 60 FPS frame count
         total_frames = max_seconds * 60
 
@@ -383,30 +384,13 @@ class NSFConverter:
         ram[self.load_addr:self.load_addr+len(self.payload)] = self.payload
 
         apu_regs = bytearray(32)
-        vrc7_addr = 0
-        vrc7_regs = bytearray(64)
-        n163_addr = 0
-        n163_autoinc = False
-        n163_ram = bytearray(128)
 
         def write_io(addr, val):
-            nonlocal vrc7_addr, n163_addr, n163_autoinc
             addr &= 0xFFFF
             val &= 0xFF
             ram[addr] = val
             if 0x4000 <= addr <= 0x4017:
                 apu_regs[addr - 0x4000] = val
-            elif addr == 0x9010:
-                vrc7_addr = val & 0x3F
-            elif addr == 0x9030:
-                vrc7_regs[vrc7_addr] = val
-            elif addr == 0x4800:
-                n163_autoinc = bool(val & 0x80)
-                n163_addr = val & 0x7F
-            elif addr == 0xF800:
-                n163_ram[n163_addr] = val
-                if n163_autoinc:
-                    n163_addr = (n163_addr + 1) & 0x7F
 
         class HookMemory:
             def __getitem__(_, a): return ram[a & 0xFFFF]
@@ -422,7 +406,7 @@ class NSFConverter:
         cpu.sp = 0xFF
         ram[0x01FF] = 0x00; ram[0x01FE] = 0x00
         step = 0
-        while cpu.pc != 0x0001 and step < 100000:
+        while cpu.pc != 0x0001 and step < 500000:
             cpu.step()
             step += 1
 
@@ -433,117 +417,97 @@ class NSFConverter:
             cpu.sp = 0xFF
             ram[0x01FF] = 0x00; ram[0x01FE] = 0x00
             step = 0
-            while cpu.pc != 0x0001 and step < 100000:
+            while cpu.pc != 0x0001 and step < 500000:
                 cpu.step()
                 step += 1
 
+            status = apu_regs[0x15]
+
             # Decode APU channels
             # Square 1
+            sq1_en = bool(status & 0x01)
             sq1_p = apu_regs[2] | ((apu_regs[3] & 0x07) << 8)
-            sq1_vol = apu_regs[0] & 0x0F
+            sq1_v_reg = apu_regs[0]
+            sq1_vol = (sq1_v_reg & 0x0F) if (sq1_v_reg & 0x10) else (15 if sq1_en else 0)
             sq1_note = 0
-            if sq1_p > 0 and sq1_vol > 0:
+            if sq1_en and sq1_p > 0 and sq1_vol > 0:
                 freq = 1789773.0 / (16.0 * (sq1_p + 1))
                 if 20 <= freq <= 12000:
                     sq1_note = int(round(12.0 * math.log2(freq / 440.0) + 69))
 
             # Square 2
+            sq2_en = bool(status & 0x02)
             sq2_p = apu_regs[6] | ((apu_regs[7] & 0x07) << 8)
-            sq2_vol = apu_regs[4] & 0x0F
+            sq2_v_reg = apu_regs[4]
+            sq2_vol = (sq2_v_reg & 0x0F) if (sq2_v_reg & 0x10) else (15 if sq2_en else 0)
             sq2_note = 0
-            if sq2_p > 0 and sq2_vol > 0:
+            if sq2_en and sq2_p > 0 and sq2_vol > 0:
                 freq = 1789773.0 / (16.0 * (sq2_p + 1))
                 if 20 <= freq <= 12000:
                     sq2_note = int(round(12.0 * math.log2(freq / 440.0) + 69))
 
             # Triangle
+            tri_en = bool(status & 0x04)
             tri_p = apu_regs[10] | ((apu_regs[11] & 0x07) << 8)
-            tri_vol = 15 if (apu_regs[8] & 0x80 or apu_regs[8] & 0x7F > 0) else 0
             tri_note = 0
-            if tri_p > 0 and tri_vol > 0:
+            if tri_en and tri_p > 0:
                 freq = 1789773.0 / (32.0 * (tri_p + 1))
                 if 20 <= freq <= 12000:
                     tri_note = int(round(12.0 * math.log2(freq / 440.0) + 69))
 
             # Noise
-            noise_vol = apu_regs[12] & 0x0F
-            noise_note = 0
-            if noise_vol > 0:
-                noise_note = 36 # Drum trigger note
+            noise_en = bool(status & 0x08)
+            noise_v_reg = apu_regs[12]
+            noise_vol = (noise_v_reg & 0x0F) if (noise_v_reg & 0x10) else (15 if noise_en else 0)
+            noise_note = 36 if (noise_en and noise_vol > 0) else 0
 
-            # Expansion / N163 channels
-            n163_chans = []
-            num_n163_ch = ((n163_ram[0x7F] >> 4) & 0x07) + 1
-            for ch in range(6):
-                base = 0x70 - ch * 8
-                if base >= 0:
-                    f_lo = n163_ram[base]
-                    f_mid = n163_ram[base + 2]
-                    f_hi = n163_ram[base + 4] & 0x03
-                    vol = n163_ram[base + 7] & 0x0F
-                    f_24 = f_lo | (f_mid << 8) | (f_hi << 16)
-                    w_len = (32 - (n163_ram[base + 4] >> 2)) * 4
-                    if w_len <= 0: w_len = 32
-                    n_note = 0
-                    if f_24 > 0 and vol > 0:
-                        f_hz = (1789773.0 * f_24) / (15.0 * 65536.0 * num_n163_ch * w_len)
-                        if 20 <= f_hz <= 12000:
-                            n_note = int(round(12.0 * math.log2(f_hz / 440.0) + 69))
-                    n163_chans.append((n_note, vol))
-                else:
-                    n163_chans.append((0, 0))
+            # DMC / PCM
+            dmc_en = bool(status & 0x10)
+            dmc_val = apu_regs[0x11] & 0x7F
+            dmc_note = 38 if (dmc_en and dmc_val > 0) else 0
 
             history.append({
                 'sq1': (sq1_note, sq1_vol),
                 'sq2': (sq2_note, sq2_vol),
-                'tri': (tri_note, tri_vol),
+                'tri': (tri_note, 15 if tri_note else 0),
                 'noise': (noise_note, noise_vol),
-                'n163': n163_chans
+                'dmc': (dmc_note, 15 if dmc_note else 0)
             })
 
-        # Group frames into tracker rows (e.g., 6 frames per row = 10 rows/sec = 600 BPM at 4 ticks/row)
+        # Group frames into tracker rows (e.g. 6 frames per row = 10 rows/sec)
         frames_per_row = 6
-        num_rows = min(32 * PATTERNS, len(history) // frames_per_row)
+        num_rows = min(32 * ROWS, len(history) // frames_per_row)
 
-        rpt = RPT2File()
+        rpt = RPT3File()
         active_rows = 0
 
-        prev_cell = [None] * CHANS
-
+        # Map channels:
+        # Ch 0: Square 1  (Inst 80 = Synth Square Lead)
+        # Ch 1: Square 2  (Inst 81 = Synth Saw Lead)
+        # Ch 2: Triangle  (Inst 33 = Bass)
+        # Ch 3: Noise     (Inst 115 = Percussion)
+        # Ch 4: DMC / PCM (Inst 118 = Synth Drum)
         for r_idx in range(num_rows):
             f_frame = history[r_idx * frames_per_row]
             pattern_idx = r_idx // ROWS
             row_in_pat = r_idx % ROWS
 
-            # Map channels:
-            # Ch 0: Square 1
-            # Ch 1: Square 2
-            # Ch 2: Triangle (Bass)
-            # Ch 3: Noise (Drums)
-            # Ch 4..8: N163 / Expansion channels 0..4
             ch_data = [
-                (f_frame['sq1'][0], 0, f_frame['sq1'][1]), # Inst 0
-                (f_frame['sq2'][0], 1, f_frame['sq2'][1]), # Inst 1
-                (f_frame['tri'][0], 2, f_frame['tri'][1]), # Inst 2
-                (f_frame['noise'][0], 3, f_frame['noise'][1]), # Inst 3
+                (f_frame['sq1'][0], 80, f_frame['sq1'][1]),
+                (f_frame['sq2'][0], 81, f_frame['sq2'][1]),
+                (f_frame['tri'][0], 33, f_frame['tri'][1]),
+                (f_frame['noise'][0], 115, f_frame['noise'][1]),
+                (f_frame['dmc'][0], 118, f_frame['dmc'][1]),
             ]
-            for ext_ch in range(5):
-                n_n, n_v = f_frame['n163'][ext_ch]
-                ch_data.append((n_n, 4 + ext_ch, n_v))
 
             row_has_note = False
-            for c_idx in range(CHANS):
+            for c_idx in range(min(CHANS, len(ch_data))):
                 midi_note, inst_id, vol_15 = ch_data[c_idx]
                 if midi_note > 0:
                     row_has_note = True
-                    # Scale 0-15 volume to 0-63
                     vol_63 = min(63, vol_15 * 4)
                     cell = PatternCell(note=midi_note, inst=inst_id, vol=vol_63)
                     rpt.set_cell(pattern_idx, row_in_pat, c_idx, cell)
-                elif prev_cell[c_idx] and prev_cell[c_idx].note > 0:
-                    # Note off if previously active
-                    pass
-                prev_cell[c_idx] = PatternCell(note=midi_note)
 
             if row_has_note:
                 active_rows = r_idx + 1

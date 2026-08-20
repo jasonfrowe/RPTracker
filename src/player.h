@@ -55,6 +55,7 @@ extern void handle_song_order_input(void);
 extern void pattern_copy(uint8_t pattern_id);
 extern void pattern_paste(uint8_t pattern_id);
 extern void update_lfo_scaler(void);
+extern void set_bpm(uint8_t bpm);
 
 extern uint16_t get_pattern_xram_addr(uint8_t pat, uint8_t row, uint8_t chan);
 extern uint8_t active_midi_note;

@@ -126,8 +126,13 @@ uint16_t bpm_to_ticks_fp(uint8_t bpm) {
     // Use 32-bit math to avoid overflow: (900 * 256) / bpm
     uint32_t ticks = ((uint32_t)230400) / bpm;
     return (uint16_t)ticks;
+}
 
-    // Update LFO scaler
+void set_bpm(uint8_t bpm) {
+    if (bpm < 60) bpm = 60;
+    if (bpm > 240) bpm = 240;
+    seq.bpm = bpm;
+    seq.ticks_per_row_fp = bpm_to_ticks_fp(seq.bpm);
     update_lfo_scaler();
 }
 

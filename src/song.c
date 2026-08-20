@@ -80,20 +80,41 @@ void update_order_display() {
     }
 }
 
+static void read_xram_loop(uint16_t xram_addr, uint16_t count, int fd) {
+    uint16_t total = 0;
+    while (total < count) {
+        int n = read_xram(xram_addr + total, count - total, fd);
+        if (n <= 0) break;
+        total += (uint16_t)n;
+    }
+}
+
+static void write_xram_loop(uint16_t xram_addr, uint16_t count, int fd) {
+    uint16_t total = 0;
+    while (total < count) {
+        int n = write_xram(xram_addr + total, count - total, fd);
+        if (n <= 0) break;
+        total += (uint16_t)n;
+    }
+}
+
 void save_song(const char* filename) {
     int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC);
     if (fd < 0) return;
 
-    write(fd, "RPT2", 4); // New Version Identifier
+    uint16_t save_bpm = seq.bpm;
+
+    write(fd, "RPT3", 4); // RPT3 Version Identifier
     write(fd, &current_octave, 1);
     write(fd, &current_volume, 1);
     write(fd, &song_length, 2);
+    write(fd, &save_bpm, 2);
 
     // Save all 32 patterns ($B400 bytes)
-    write_xram(0x0000, 0xB400, fd); 
+    write_xram_loop(0x0000, 0xB400, fd); 
 
     // Save the 256-step Sequence Order (at $B400)
-    write_xram(0xB400, 0x0100, fd);
+    write_xram_loop(0xB400, 0x0100, fd);
 
     close(fd);
 }
@@ -117,23 +138,34 @@ void load_song(const char* filename) {
         return;
     }
 
-    // 1. Read Metadata into 6502 RAM
-    read(fd, &current_octave, 1);
-    read(fd, &current_volume, 1);
-    read(fd, &song_length, 2);
+    uint16_t loaded_bpm = 150;
+
+    // 1. Read Metadata into 6502 RAM based on version
+    if (head[3] == '3') {
+        // RPT3 format: Octave (1B), Volume (1B), Song Length (2B), BPM (2B)
+        read(fd, &current_octave, 1);
+        read(fd, &current_volume, 1);
+        read(fd, &song_length, 2);
+        read(fd, &loaded_bpm, 2);
+    } else {
+        // RPT2 format: Octave (1B), Volume (1B), Song Length (2B), default BPM = 150
+        read(fd, &current_octave, 1);
+        read(fd, &current_volume, 1);
+        read(fd, &song_length, 2);
+        loaded_bpm = 150;
+    }
 
     // 2. Load bulk data directly into XRAM
-    read_xram(0x0000, 0xB400, fd); // Patterns
-    read_xram(0xB400, 0x0100, fd); // Sequence List
+    read_xram_loop(0x0000, 0xB400, fd); // Patterns
+    read_xram_loop(0xB400, 0x0100, fd); // Sequence List
 
     close(fd); // Close file immediately after reading
 
     // 3. UPDATE LOGICAL STATE BEFORE UI REFRESH
-    // This ensures that when the screen draws, it's already looking 
-    // at the first pattern of the NEW song.
     cur_order_idx = 0;
     cur_pattern = read_order_xram(0); 
     cur_row = 0;
+    set_bpm((uint8_t)loaded_bpm);
 
     // 4. SYNC GLOBALS
     strncpy(active_filename, filename, 63);
@@ -142,7 +174,7 @@ void load_song(const char* filename) {
     // 5. SINGLE UI REFRESH (Clears dialog and draws new data in one burst)
     refresh_all_ui(); 
     
-    printf("Loaded: %s\n", active_filename);
+    printf("Loaded: %s (BPM: %d)\n", active_filename, loaded_bpm);
 }
 
 void handle_filename_input() {
