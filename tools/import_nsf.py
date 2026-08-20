@@ -32,12 +32,56 @@ class PatternCell:
         hi = (self.effect >> 8) & 0xFF
         return bytes([self.note, self.inst, self.vol, lo, hi])
 
-class RPT3File:
+class OPLPatch:
+    def __init__(self, m_ave=0x01, m_ksl=0x00, m_atdec=0xF0, m_susrel=0x50, m_wave=0x00,
+                 c_ave=0x01, c_ksl=0x00, c_atdec=0xF0, c_susrel=0x50, c_wave=0x00, feedback=0x00):
+        self.m_ave = m_ave
+        self.m_ksl = m_ksl
+        self.m_atdec = m_atdec
+        self.m_susrel = m_susrel
+        self.m_wave = m_wave
+        self.c_ave = c_ave
+        self.c_ksl = c_ksl
+        self.c_atdec = c_atdec
+        self.c_susrel = c_susrel
+        self.c_wave = c_wave
+        self.feedback = feedback
+
+    def to_bytes(self):
+        return bytes([self.m_ave, self.m_ksl, self.m_atdec, self.m_susrel, self.m_wave,
+                      self.c_ave, self.c_ksl, self.c_atdec, self.c_susrel, self.c_wave, self.feedback])
+
+class RPT4File:
     def __init__(self):
         self.octave = 3
         self.volume = 63
         self.song_length = 1
         self.bpm = 150
+        self.user_bank = [OPLPatch() for _ in range(256)]
+        
+        # Override NES & Expansion instruments with standard AdLib GM OPL2 sound patches
+        # Inst 80 (0x50 - Square 1): Classic AdLib Square Wave
+        self.user_bank[80] = OPLPatch(m_ave=0x21, m_ksl=0x1D, m_atdec=0xF2, m_susrel=0x0F, m_wave=0x03,
+                                     c_ave=0x21, c_ksl=0x00, c_atdec=0xF2, c_susrel=0x18, c_wave=0x00, feedback=0x00)
+        # Inst 81 (0x51 - Square 2): Classic AdLib Sawtooth Wave
+        self.user_bank[81] = OPLPatch(m_ave=0x41, m_ksl=0x11, m_atdec=0xF0, m_susrel=0xFF, m_wave=0x00,
+                                     c_ave=0x01, c_ksl=0x00, c_atdec=0xF0, c_susrel=0xFF, c_wave=0x00, feedback=0x02)
+        # Inst 33 (0x21 - Triangle): Smooth AdLib Electric Bass
+        self.user_bank[33] = OPLPatch(m_ave=0x01, m_ksl=0x18, m_atdec=0xD4, m_susrel=0xF2, m_wave=0x00,
+                                     c_ave=0x21, c_ksl=0x80, c_atdec=0xC4, c_susrel=0x8A, c_wave=0x00, feedback=0x02)
+        # Inst 115 (0x73 - Noise): Woodblock / Percussion
+        self.user_bank[115] = OPLPatch(m_ave=0x32, m_ksl=0x44, m_atdec=0xF8, m_susrel=0xFF, m_wave=0x00,
+                                      c_ave=0x11, c_ksl=0x00, c_atdec=0xF5, c_susrel=0x7F, c_wave=0x00, feedback=0x04)
+        # Inst 118 (0x76 - DMC): Synth Drum / Kick
+        self.user_bank[118] = OPLPatch(m_ave=0x00, m_ksl=0x0D, m_atdec=0xE8, m_susrel=0xEF, m_wave=0x00,
+                                      c_ave=0x00, c_ksl=0x00, c_atdec=0xA5, c_susrel=0xFF, c_wave=0x00, feedback=0x02)
+        # Inst 38 (0x26 - N163 Ch 0): Clean AdLib Synth Lead
+        self.user_bank[38] = OPLPatch(m_ave=0x21, m_ksl=0x00, m_atdec=0xF1, m_susrel=0x38, m_wave=0x00,
+                                     c_ave=0x21, c_ksl=0x00, c_atdec=0xF1, c_susrel=0x38, c_wave=0x00, feedback=0x01)
+        # Inst 39 (0x27 - N163 Ch 1): Warm AdLib Synth Bass
+        self.user_bank[39] = OPLPatch(m_ave=0x01, m_ksl=0x00, m_atdec=0xF1, m_susrel=0x54, m_wave=0x00,
+                                     c_ave=0x01, c_ksl=0x00, c_atdec=0xF1, c_susrel=0x54, c_wave=0x00, feedback=0x00)
+
         self.patterns = [[PatternCell() for _ in range(CHANS)] for _ in range(ROWS * PATTERNS)]
         self.sequence = [0] * 256
 
@@ -50,9 +94,12 @@ class RPT3File:
         os.makedirs(os.path.dirname(os.path.abspath(filename)), exist_ok=True)
         with open(filename, 'wb') as f:
             # Header
-            f.write(b'RPT3')
+            f.write(b'RPT4')
             # Metadata: Octave (B), Volume (B), Song Length (H), BPM (H)
             f.write(struct.pack('<BBHH', self.octave, self.volume, self.song_length, self.bpm))
+            # Custom Patch Bank: 256 x 11 bytes = 2816 bytes
+            for patch in self.user_bank:
+                f.write(patch.to_bytes())
             # 32 patterns x 32 rows x 9 channels x 5 bytes
             for p in range(PATTERNS):
                 for r in range(ROWS):
@@ -361,6 +408,30 @@ class CPU6502:
             self.v = (val >> 6) & 1
             self.n = (val >> 7) & 1
 
+def normalize_midi_note(note):
+    if note <= 0:
+        return 0
+    return min(127, max(1, note))
+
+def map_apu_vol_to_rpt(vol_15):
+    if vol_15 <= 0:
+        return 0
+    return int(round(24 + (vol_15 / 15.0) * 39))
+
+class NSFImporter:
+    def __init__(self, filename):
+        self.filename = filename
+        with open(filename, 'rb') as f:
+            self.data = f.read()
+
+        if self.data[:5] != b'NESM\x1A':
+            raise ValueError("Not a valid NSF file")
+
+        self.total_songs = self.data[6]
+        self.start_song = self.data[7]
+        self.load_addr, self.init_addr, self.play_addr = struct.unpack('<HHH', self.data[8:14])
+        self.title = self.data[0x0E:0x2E].split(b'\x00')[0].decode('latin1', 'ignore').strip()
+
 class NSFConverter:
     def __init__(self, nsf_path):
         with open(nsf_path, 'rb') as f:
@@ -384,13 +455,24 @@ class NSFConverter:
         ram[self.load_addr:self.load_addr+len(self.payload)] = self.payload
 
         apu_regs = bytearray(32)
+        n163_addr = 0
+        n163_auto_inc = False
+        n163_ram = bytearray(128)
 
         def write_io(addr, val):
+            nonlocal n163_addr, n163_auto_inc
             addr &= 0xFFFF
             val &= 0xFF
             ram[addr] = val
             if 0x4000 <= addr <= 0x4017:
                 apu_regs[addr - 0x4000] = val
+            elif addr == 0xF800:
+                n163_addr = val & 0x7F
+                n163_auto_inc = bool(val & 0x80)
+            elif addr == 0x4800:
+                n163_ram[n163_addr] = val
+                if n163_auto_inc:
+                    n163_addr = (n163_addr + 1) & 0x7F
 
         class HookMemory:
             def __getitem__(_, a): return ram[a & 0xFFFF]
@@ -433,7 +515,7 @@ class NSFConverter:
             if sq1_en and sq1_p > 0 and sq1_vol > 0:
                 freq = 1789773.0 / (16.0 * (sq1_p + 1))
                 if 20 <= freq <= 12000:
-                    sq1_note = int(round(12.0 * math.log2(freq / 440.0) + 69))
+                    sq1_note = normalize_midi_note(int(round(12.0 * math.log2(freq / 440.0) + 69)))
 
             # Square 2
             sq2_en = bool(status & 0x02)
@@ -444,7 +526,7 @@ class NSFConverter:
             if sq2_en and sq2_p > 0 and sq2_vol > 0:
                 freq = 1789773.0 / (16.0 * (sq2_p + 1))
                 if 20 <= freq <= 12000:
-                    sq2_note = int(round(12.0 * math.log2(freq / 440.0) + 69))
+                    sq2_note = normalize_midi_note(int(round(12.0 * math.log2(freq / 440.0) + 69)))
 
             # Triangle
             tri_en = bool(status & 0x04)
@@ -453,7 +535,7 @@ class NSFConverter:
             if tri_en and tri_p > 0:
                 freq = 1789773.0 / (32.0 * (tri_p + 1))
                 if 20 <= freq <= 12000:
-                    tri_note = int(round(12.0 * math.log2(freq / 440.0) + 69))
+                    tri_note = normalize_midi_note(int(round(12.0 * math.log2(freq / 440.0) + 69)))
 
             # Noise
             noise_en = bool(status & 0x08)
@@ -466,19 +548,62 @@ class NSFConverter:
             dmc_val = apu_regs[0x11] & 0x7F
             dmc_note = 38 if (dmc_en and dmc_val > 0) else 0
 
+            # Namco 163 Expansion Channels
+            num_n163 = ((n163_ram[0x7F] >> 4) & 0x07) + 1
+            n163_active_notes = []
+
+            for i in range(num_n163):
+                ch_base = 0x78 - (i * 8)
+                vol = n163_ram[ch_base + 7] & 0x0F
+                freq_18 = n163_ram[ch_base + 0] | (n163_ram[ch_base + 2] << 8) | ((n163_ram[ch_base + 4] & 0x03) << 16)
+                wave_len = 256 - (n163_ram[ch_base + 4] & 0xFC)
+                if wave_len <= 0: wave_len = 32
+                if vol > 0 and freq_18 > 0:
+                    freq = (freq_18 * 1789773.0) / (15.0 * 65536.0 * num_n163 * wave_len)
+                    if 20 <= freq <= 12000:
+                        mnote = normalize_midi_note(int(round(12.0 * math.log2(freq / 440.0) + 69)))
+                        n163_active_notes.append((mnote, vol))
+
+            n163_0_note, n163_0_vol = n163_active_notes[0] if len(n163_active_notes) > 0 else (0, 0)
+            n163_1_note, n163_1_vol = n163_active_notes[1] if len(n163_active_notes) > 1 else (0, 0)
+
             history.append({
                 'sq1': (sq1_note, sq1_vol),
                 'sq2': (sq2_note, sq2_vol),
                 'tri': (tri_note, 15 if tri_note else 0),
                 'noise': (noise_note, noise_vol),
-                'dmc': (dmc_note, 15 if dmc_note else 0)
+                'dmc': (dmc_note, 15 if dmc_note else 0),
+                'n163_0': (n163_0_note, n163_0_vol),
+                'n163_1': (n163_1_note, n163_1_vol),
             })
 
-        # Group frames into tracker rows (e.g. 6 frames per row = 10 rows/sec)
+        # Dynamically measure NTSC frame step rate (frames_per_row) for this track
+        deltas = {}
+        prev_notes = None
+        prev_f = 0
+        for f, h in enumerate(history):
+            curr_notes = (h['sq1'][0], h['sq2'][0], h['tri'][0], h['n163_0'][0], h['n163_1'][0])
+            if prev_notes is not None and curr_notes != prev_notes:
+                d = f - prev_f
+                if d > 1:
+                    deltas[d] = deltas.get(d, 0) + 1
+                prev_f = f
+            elif prev_notes is None:
+                prev_f = f
+            prev_notes = curr_notes
+
         frames_per_row = 6
+        if deltas:
+            most_freq = sorted(deltas.items(), key=lambda x: x[1], reverse=True)[0][0]
+            if 3 <= most_freq <= 12:
+                frames_per_row = most_freq
+
+        calculated_bpm = int(round(900.0 / frames_per_row))
+
         num_rows = min(32 * ROWS, len(history) // frames_per_row)
 
-        rpt = RPT3File()
+        rpt = RPT4File()
+        rpt.bpm = calculated_bpm
         active_rows = 0
 
         # Map channels:
@@ -487,6 +612,8 @@ class NSFConverter:
         # Ch 2: Triangle  (Inst 33 = Bass)
         # Ch 3: Noise     (Inst 115 = Percussion)
         # Ch 4: DMC / PCM (Inst 118 = Synth Drum)
+        # Ch 5: N163 Ch 0 (Inst 38 = Synth Lead)
+        # Ch 6: N163 Ch 1 (Inst 39 = Synth Bass)
         for r_idx in range(num_rows):
             f_frame = history[r_idx * frames_per_row]
             pattern_idx = r_idx // ROWS
@@ -498,6 +625,8 @@ class NSFConverter:
                 (f_frame['tri'][0], 33, f_frame['tri'][1]),
                 (f_frame['noise'][0], 115, f_frame['noise'][1]),
                 (f_frame['dmc'][0], 118, f_frame['dmc'][1]),
+                (f_frame['n163_0'][0], 38, f_frame['n163_0'][1]),
+                (f_frame['n163_1'][0], 39, f_frame['n163_1'][1]),
             ]
 
             row_has_note = False
@@ -505,7 +634,7 @@ class NSFConverter:
                 midi_note, inst_id, vol_15 = ch_data[c_idx]
                 if midi_note > 0:
                     row_has_note = True
-                    vol_63 = min(63, vol_15 * 4)
+                    vol_63 = map_apu_vol_to_rpt(vol_15)
                     cell = PatternCell(note=midi_note, inst=inst_id, vol=vol_63)
                     rpt.set_cell(pattern_idx, row_in_pat, c_idx, cell)
 

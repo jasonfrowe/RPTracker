@@ -102,13 +102,13 @@ static int8_t get_semitone(uint8_t scancode) {
 }
 
 void select_instrument(uint8_t inst_idx) {
-    if (inst_idx > 127) inst_idx = 127;
     current_instrument = inst_idx;
-    memcpy(&active_patch, &gm_bank[current_instrument], sizeof(OPL_Patch));
+    memcpy(&active_patch, &user_bank[current_instrument], sizeof(OPL_Patch));
     update_dashboard();
 }
 
 void player_init(void) {
+    memcpy(user_bank, gm_bank, sizeof(user_bank));
     select_instrument(0);
 }
 
@@ -818,7 +818,7 @@ void sequencer_step(void) {
                     
                     // Strike the detuned note now
                     OPL_NoteOff(ch);
-                    OPL_SetPatch(ch, &gm_bank[ch_finepitch[ch].inst]);
+                    OPL_SetPatch(ch, &user_bank[ch_finepitch[ch].inst]);
                     OPL_SetVolume(ch, ch_finepitch[ch].vol << 1); 
                     
                     // CALL THE DETUNED FUNCTION
@@ -926,7 +926,7 @@ void sequencer_step(void) {
                         start_offset = get_arp_offset(ch_arp[ch].style, ch_arp[ch].depth, 0);
                     }
 
-                    OPL_SetPatch(ch, &gm_bank[cell.inst]);
+                    OPL_SetPatch(ch, &user_bank[cell.inst]);
                     OPL_SetVolume(ch, cell.vol << 1); 
                     OPL_NoteOn(ch, cell.note + start_offset);
                     ch_peaks[ch] = cell.vol;
@@ -1208,7 +1208,7 @@ void modify_instrument(int8_t delta) {
         render_row(cur_row);
         
         // Live Preview: Update OPL2 patch immediately
-        OPL_SetPatch(cur_channel, &gm_bank[cell.inst]);
+        OPL_SetPatch(cur_channel, &user_bank[cell.inst]);
     } 
     else {
         // --- GLOBAL BRUSH EDIT ONLY ---
@@ -1249,7 +1249,7 @@ void modify_note(int8_t delta) {
         // 3. Live Preview: Play the "nudged" note
         OPL_NoteOff(cur_channel);
         // ch_peaks[cur_channel] = 0; // Clear peak
-        OPL_SetPatch(cur_channel, &gm_bank[cell.inst]);
+        OPL_SetPatch(cur_channel, &user_bank[cell.inst]);
         OPL_SetVolume(cur_channel, cell.vol << 1);
         OPL_NoteOn(cur_channel, cell.note);
         ch_peaks[cur_channel] = cell.vol; // Set peak
@@ -1439,6 +1439,7 @@ static void sync_opl_patch_reg(uint8_t op, uint8_t offset, uint8_t val) {
             }
         }
     }
+    user_bank[current_instrument] = active_patch;
 }
 
 void midi_process_note_on(uint8_t chan, uint8_t note, uint8_t velocity) {
@@ -1661,12 +1662,24 @@ void midi_process_pitch_bend(uint8_t chan, uint16_t pb_val) {
     }
 }
 
+static uint8_t midi_bank[16] = {0};
+
+void midi_process_program_change(uint8_t chan, uint8_t program) {
+    uint8_t bank = midi_bank[chan & 0x0F];
+    uint16_t patch_idx = ((uint16_t)bank * 128) + (program & 0x7F);
+    if (patch_idx > 255) patch_idx = 255;
+    select_instrument((uint8_t)patch_idx);
+}
+
 void midi_process_cc(uint8_t chan, uint8_t cc_num, uint8_t cc_val) {
-    (void)chan; // Suppress unused parameter warning
-    
     switch (cc_num) {
-        case 74: // Knob 1 -> Instrument Select (0-127)
-            select_instrument(cc_val);
+        case 0:
+        case 32: // Bank Select MSB/LSB
+            midi_bank[chan & 0x0F] = (cc_val > 0) ? 1 : 0;
+            break;
+
+        case 74: // Knob 1 -> Instrument Select (scaled to full 0-255 patch range)
+            select_instrument((uint8_t)(((uint16_t)cc_val * 255) / 127));
             break;
             
         case 71: // Knob 2 -> Volume Select (0-63)

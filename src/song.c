@@ -104,11 +104,14 @@ void save_song(const char* filename) {
 
     uint16_t save_bpm = seq.bpm;
 
-    write(fd, "RPT3", 4); // RPT3 Version Identifier
+    write(fd, "RPT4", 4); // RPT4 Version Identifier (with custom patch overrides)
     write(fd, &current_octave, 1);
     write(fd, &current_volume, 1);
     write(fd, &song_length, 2);
     write(fd, &save_bpm, 2);
+
+    // Save custom patch bank (256 x 11 bytes = 2816 bytes)
+    write(fd, user_bank, sizeof(user_bank));
 
     // Save all 32 patterns ($B400 bytes)
     write_xram_loop(0x0000, 0xB400, fd); 
@@ -141,18 +144,27 @@ void load_song(const char* filename) {
     uint16_t loaded_bpm = 150;
 
     // 1. Read Metadata into 6502 RAM based on version
-    if (head[3] == '3') {
+    if (head[3] == '4') {
+        // RPT4 format: Octave (1B), Volume (1B), Song Length (2B), BPM (2B), Custom Bank (2816B)
+        read(fd, &current_octave, 1);
+        read(fd, &current_volume, 1);
+        read(fd, &song_length, 2);
+        read(fd, &loaded_bpm, 2);
+        read(fd, user_bank, sizeof(user_bank));
+    } else if (head[3] == '3') {
         // RPT3 format: Octave (1B), Volume (1B), Song Length (2B), BPM (2B)
         read(fd, &current_octave, 1);
         read(fd, &current_volume, 1);
         read(fd, &song_length, 2);
         read(fd, &loaded_bpm, 2);
+        memcpy(user_bank, gm_bank, sizeof(user_bank));
     } else {
-        // RPT2 format: Octave (1B), Volume (1B), Song Length (2B), default BPM = 150
+        // RPT2 / RPT1 format: Octave (1B), Volume (1B), Song Length (2B), default BPM = 150
         read(fd, &current_octave, 1);
         read(fd, &current_volume, 1);
         read(fd, &song_length, 2);
         loaded_bpm = 150;
+        memcpy(user_bank, gm_bank, sizeof(user_bank));
     }
 
     // 2. Load bulk data directly into XRAM
@@ -166,6 +178,7 @@ void load_song(const char* filename) {
     cur_pattern = read_order_xram(0); 
     cur_row = 0;
     set_bpm((uint8_t)loaded_bpm);
+    select_instrument(current_instrument);
 
     // 4. SYNC GLOBALS
     strncpy(active_filename, filename, 63);
