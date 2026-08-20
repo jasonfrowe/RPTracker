@@ -1,9 +1,6 @@
-cmake_minimum_required(VERSION 3.18)
+cmake_minimum_required(VERSION 3.21)
 
-add_subdirectory(tools)
-
-set(LLVM_MOS_PLATFORM rp6502)
-find_package(llvm-mos-sdk REQUIRED)
+include(${CMAKE_CURRENT_LIST_DIR}/tools/rp6502.cmake)
 
 project(MY-RP6502-PROJECT C CXX ASM)
 
@@ -20,8 +17,8 @@ endif()
 add_executable(RPTracker)
 rp6502_asset(RPTracker help src/main.hlp)
 rp6502_executable(RPTracker
-    DATA file
-    RESET file
+    DATA default
+    RESET default
 )
 target_sources(RPTracker PRIVATE
     src/main.c

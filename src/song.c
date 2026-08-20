@@ -16,8 +16,8 @@ uint8_t cur_order_idx = 0; // Where we are in the playlist
 uint16_t song_length = 1;   // Total number of patterns in the song
 bool is_song_mode = false;   // Default to Pattern Mode
 
-char dialog_buffer[13] = "NEWSONG.RPT";
-char active_filename[13] = "UNTITLED.RPT"; // 8.3 format + null terminator
+char dialog_buffer[64] = "NEWSONG.RPT";
+char active_filename[64] = "UNTITLED.RPT";
 uint8_t dialog_pos = 0; // Current cursor position in the string
 bool is_saving = false;
 bool is_dialog_active = false;
@@ -100,8 +100,13 @@ void save_song(const char* filename) {
 
 void load_song(const char* filename) {
     int fd = open(filename, O_RDONLY);
+    if (fd < 0 && strncmp(filename, "0:", 2) != 0) {
+        char drive_path[64];
+        snprintf(drive_path, sizeof(drive_path), "0:%s", filename);
+        fd = open(drive_path, O_RDONLY);
+    }
     if (fd < 0) {
-        printf("Error: File not found\n");
+        printf("Error: File not found: %s\n", filename);
         return;
     }
 
@@ -131,8 +136,8 @@ void load_song(const char* filename) {
     cur_row = 0;
 
     // 4. SYNC GLOBALS
-    strncpy(active_filename, filename, 12);
-    active_filename[12] = '\0';
+    strncpy(active_filename, filename, 63);
+    active_filename[63] = '\0';
 
     // 5. SINGLE UI REFRESH (Clears dialog and draws new data in one burst)
     refresh_all_ui(); 

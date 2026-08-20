@@ -10,8 +10,8 @@ extern uint16_t song_length;
 extern bool is_song_mode;
 extern bool is_dialog_active;
 extern bool is_saving;
-extern char dialog_buffer[13]; // 8.3 filename + null terminator
-extern char active_filename[13]; // Current loaded filename
+extern char dialog_buffer[64]; // Filename buffer
+extern char active_filename[64]; // Current loaded filename
 extern uint8_t dialog_pos;
 
 extern void update_order_display();
@@ -19,6 +19,8 @@ extern uint8_t read_order_xram(uint8_t index);
 extern void write_order_xram(uint8_t index, uint8_t pattern_id);
 extern void handle_filename_input();
 extern char scancode_to_ascii(uint8_t scancode);
+extern void load_song(const char* filename);
+extern void save_song(const char* filename);
 
 // Picocomputer OS Call Registers (Device 0, Channel 0)
 #define TRK_READ_XRAM  0x31

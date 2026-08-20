@@ -12,6 +12,12 @@
 #include "usb_hid_keys.h"
 #include "effects.h"
 
+// Opt-in to CRT command line arguments (ARGV) storage allocation
+void *__argv_mem(size_t size)
+{
+    return malloc(size);
+}
+
 unsigned text_message_addr;         // Text message address
 
 static void init_graphics(void)
@@ -76,7 +82,7 @@ void init_patterns(void) {
 
 }
 
-int main(void)
+int main(int argc, char *argv[])
 {
     // 1. Hardware Initialization
     OPL_Config(1, OPL_ADDR);
@@ -108,6 +114,11 @@ int main(void)
     // Default all OPL channels to Piano
     for (uint8_t i = 0; i < 9; i++){
         OPL_SetPatch(i, &gm_bank[0]);
+    }
+
+    // 5. Load RPT file from command line argument if provided
+    if (argc > 1 && argv[1] != NULL && argv[1][0] != '\0') {
+        load_song(argv[1]);
     }
 
     uint8_t vsync_last = RIA.vsync;

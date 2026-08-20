@@ -6,3 +6,7 @@ out
 junk
 .DS_Store
 releases
+/NSF
+/tools/rp6502-emu
+/tools/rp6502-emu.exe
+/music/PAC*
